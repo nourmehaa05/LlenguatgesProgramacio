@@ -53,7 +53,64 @@
 
 (defun iniciar-partida()
     (setq *estat* (crear-estat-inicial)) ; estat variable global.
+    ; carregar mapa
+    ; crear elements inicials
+    ; bucle partida! --> mentre no arribem al FINAL, executar partida
 )
+
+(defun jugar-partida()
+    ; bucle --> mentre nigú hagi matat base O BÉ no hem arribat a 1500 torns
+    ; executar-torn
+    ; si no, --> REVISAR QUI HA GUANYAT
+
+)
+
+(defun es-final()
+    ; revisar matar base
+    ; revisar 1500 torns
+)
+
+(defun qui-ha-guanyat()
+
+)
+
+
+
+;; ------------------------------------------------------------------
+;;  ------------------- JUGAR PARTIDA -------------------
+;; ------------------------------------------------------------------
+
+; executar torn --> bucle per unitat I L'AGENT ENS VA DIGUENT EL QUE FEIM
+(defun executar-torn()
+    ; bucle de MENTRE QUEDIN UNITATS PER ACTUAR, o bé l'agent retorni fals de que no vol actuar
+    ; cridam a rebre moviment agent
+    ; cridam a executar accio --> si retorna fals es que no era possible executar el moviment
+    ; si TODAS LAS UNIDADES YA ACTUARON --> SALIR
+)
+
+; rebre moviment agent  d'una unitat en concret
+(defun rebre-accio-agent()
+    
+
+)
+
+; esta la haria mas adelante 
+(defun validar-accio()
+    "Valida si la unitat ja ha actuat."
+    ;; LAS SIGUIENTES COSAS NOSE SI LAS VALIDA EL AGENTE O NOSOTROS, YA VEREMOS.
+    ;; si la unitat ja ha actuat
+    ;; si la bolla té pintura
+    ;; si la bolla es pot moure a x casella...
+
+)
+
+(defun executar-accio(accio)
+    ;  SWITCH identificar accio i cridar al mètode.
+    ; Moure bolla
+    ; Crear bolla
+    ; Pintar --> bolla, lab, base
+)
+
 
 ;; ------------------------------------------------------------------
 ;;  ------------------- CARREGAR MAPA ------------------- NOUR!!!!!!!!!!!!
@@ -93,14 +150,37 @@
       *estat*))
 )
 
-;; get bolles per equip
+(defun get-bolla-id()
+
+)
+
+;; GET COLORS PINTATS (bolla, base)
+(defun get-colors-pintats(unitat)
+
+)
+
+;; get suma bolles per equip
+(defun get-suma-bolles-equip(equip)
+
+)
+
+;; get suma laboratoris per equip
+(defun get-suma-laboratoris-equip(equip)
+
+)
 
 
-;; ...
+;; get temps recuperacio bolla id
+(defun get-temps-recuperacio()
+
+)
+
 
 ;; ------------------------------------------------------------------
 ;;  ------------------- GESTIÓ DE TORNS ------------------- 
 ;; ------------------------------------------------------------------
+
+
 
 (defun canviar-equip ()
   (setf (cadr (assoc 'torn *estat*))
@@ -125,20 +205,71 @@
           (+ (cadr (assoc clau *estat*)) sum)))
 )
 
-;; BASE CREA BOLLES 
+
+(defun decrementar-pintura(quantitat, equip)
+    "Decrementa certa quantitat de pintura de l'equip"
+)
 
 
 ;; ------------------------------------------------------------------
 ;;  ------------------- GESTIÓ DE MAPA ------------------- NOUR!!!!!!!!!!!!
 ;; ------------------------------------------------------------------
 
-;; afegir funcions de matrius
-; devolver true/fals si la bola puede ir
-; devolver true/fals si la bola puede pintar
-; pq habría que mirar --> es agua, es lab, es base, hi ha bolla?
+;; FUNCIONS MATRICIALS
 (defun es-laboratori()
-; si es equipo e1 --> si es laboratorio enemigo, PINTARLO
-; sino, OMITIRLO
+
+)
+
+(defun es-base-enemiga()
+
+)
+
+(defun es-aigua()
+
+)
+
+(defun es-bolla-enemiga()
+
+)
+
+(defun es-bolla-amiga() ; nsoe si aquest mètode és necessari pero per si de cas.
+
+)
+
+(defun es-posicio-lliure()
+    "Retorna true si la casella indicada no està ocupada."
+)
+
+;; FUNCIONS DE MODIFICACIÓ DE MAPA --> potser vagin dins grafis.lsp
+
+(defun pintar-casella(coord, color)
+    "Pinta la casella enemiga."
+
+)
+
+;; ------------------------------------------------------------------
+;;  ------------------- GESTIÓ ACCIONS PER TORN -------------------
+;; ------------------------------------------------------------------
+
+; Crear bolla
+(defun crear-bolla(equip)
+    "Crea una bolla des de la base de l'equip en la primera posició lliure adjacent"
+)
+
+(defun moure-bolla()
+    ; llamar a funciones --> revisar si moviment vàlid
+    ; llamar a funciones: moure bolla, incrementar temps recuperacio
+
+)
+
+(defun pintar-bolla()
+
+)
+
+(defun pintar-laboratori()
+)
+
+(defun pintar-base()
 
 )
 
@@ -147,33 +278,40 @@
 
 
 
-;; ------------------------------------------------------------------
-;;  ------------------- GESTIÓ DE BASES -------------------
-;; ------------------------------------------------------------------
-
-;; mirar si está pintada (pasar x parámetro)
-
-;; crear bolas
 
 ;; ------------------------------------------------------------------
-;;  ------------------- GESTIÓ DE LABORATORIS -------------------
+;;  ------------------- GESTIÓ DE UNITATS -------------------
 ;; ------------------------------------------------------------------
 
-;
+;; LABORATORIS
+
+(defun es-laboratori-ocupat(lab)
+
+)
+
+(defun es-laboratori-meu(equip, lab)
+    "Revisa si el laboratori que li passam "
+)
+
+(defun canviar-equip-laboratori()
+
+)
+
+
+
+
 
 ;; ------------------------------------------------------------------
-;;  ------------------- GESTIÓ DE BOLLES ------------------- NOUR!!!!!!!!!!!!
+;;  ------------------- GESTIÓ DE BOLLES ------------------- NOUR!!!
 ;; ------------------------------------------------------------------
 
-;; mirar de quants colors està pintada
 
-; mirar su tiempo de recuperación
+; incrementar temps recuperacio
+(defun incrementar-temps-recuperacio()
 
+)
 
+; decrementar temps recuperacio
+(defun decrementar-temps-recuperacio()
 
-;; ------------------------------------------------------------------
-;;  ------------------- GESTIÓ DE L'ABAST ------------------- --> nose si va aquí o en otro sitio
-;; ------------------------------------------------------------------
-
-; mirar alcance base
-;
+)
