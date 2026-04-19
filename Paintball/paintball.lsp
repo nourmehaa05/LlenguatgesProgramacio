@@ -61,23 +61,25 @@
                      (list 'alt 12)))     ; default, s'actualitzarà en carregar-mapa
    (list 'bases nil)
    (list 'laboratoris nil)
-   (list 'unitats '())
+   (list 'unitats nil)
    (list 'next-bolla-id 0)
    (list 'pintura-e1 200)
    (list 'pintura-e2 200)
    (list 'memoria-compartida nil)))  ; <-- AFEGIT
 
 ;; ------------------------------------------------------------------
-;;  ------------------- INICIALITZAR ELEMENTS -------------------
+;;  ------------------- INICIALITZAR BASES I LABS -------------------
 ;; ------------------------------------------------------------------
 
+
+;; Tenim partida amb labs i bases FIXOS (classic) i ALEATORIS (aleatori)
 (defun inicialitzar-elements (estat tipus)
   "Col·loca les bases i laboratoris segons el tipus de partida: classic o aleatori."
   (let* ((estat1 (crear-bases estat tipus))
          (estat2 (crear-laboratoris estat1 tipus)))
     estat2))
 
-;; Bases
+;; BASES
 (defun obtenir-posicions-bases (estat tipus)
   (cond
     ((eq tipus 'classic) (posicions-bases-classic))
@@ -85,11 +87,11 @@
 
 (defun crear-bases (estat tipus)
   (let* ((posicions (obtenir-posicions-bases estat tipus))
-         (bases (list (crear-base 'e1 (first posicions))
-                      (crear-base 'e2 (second posicions)))))
-    (subst (list 'bases bases)
-           (assoc 'bases estat)
-           estat)))
+         (b1 (car posicions))
+         (b2 (cadr posicions))
+         (bases (list (crear-base 'e1 b1)
+                      (crear-base 'e2 b2))))
+    (substituir-camp 'bases bases estat)))
 
 (defun crear-base (equip coord)
   (list
@@ -97,7 +99,7 @@
    (list 'coord coord)
    (list 'colors-pintat '())))
 
-;; Laboratoris
+;; LABORATORIS
 (defun obtenir-posicions-labs (estat tipus)
   (if (eq tipus 'classic)
       (posicions-labs-classic)
@@ -105,490 +107,25 @@
 
 (defun crear-laboratoris (estat tipus)
   (let ((labs (mapcar #'crear-lab (obtenir-posicions-labs estat tipus))))
-    (subst (list 'laboratoris labs)
-           (assoc 'laboratoris estat)
-           estat)))
+    (substituir-camp 'laboratoris labs estat)))
 
 (defun crear-lab (coord)
   (list (list 'coord coord)
         (list 'equip nil)))
 
 
-;; ------------------------------------------------------------------
-;;  ------------------- POSICIONS FIXES I ALEATÒRIES -------------------
-;; ------------------------------------------------------------------
-(defun posicions-bases-classic () '((1 1) (10 10))) ; Revisar que en ambos mapas funcionen.
-
-(defun posicions-bases-aleatori (estat)
-  (list (coord-lliure-aleatoria estat)
-        (coord-lliure-aleatoria estat)))
-
-(defun posicions-labs-classic ()
-  '((5 5) (7 3) (2 8) (3 4) (6 7) (8 2) (1 9) (9 1) (4 6) (10 5))) ; Revisar que en ambos mapas funcionen.
-
-(defun posicions-labs-aleatori (estat)
-  "Genera 10 posicions aleatòries lliures per als laboratoris."
-  (generar-coords-aleatories 10 estat))
-
-(defun generar-coords-aleatories (n estat)
-  "Genera recursivament n coordenades aleatòries lliures."
-  (if (= n 0)
-      nil
-      (cons (coord-lliure-aleatoria estat)
-            (generar-coords-aleatories (- n 1) estat))))
-
-(defun coord-lliure-aleatoria (estat) ; POTSER en el mapa gran tardi molt la recursió, REVISAR!!!
-  (let* ((mapa (cadr (assoc 'mapa estat)))
-         (amplada (cadr (assoc 'amplada mapa)))
-         (alt (cadr (assoc 'alt mapa)))
-         (coord (list (random amplada) (random alt))))
-    (if (es-posicio-lliure coord estat)
-        coord
-        (coord-lliure-aleatoria estat))))
-
-;; ------------------------------------------------------------------
-;;  ------------------- CARREGAR MAPA -------------------
-;; ------------------------------------------------------------------
-(defun carregar-mapa (estat mapa-nom)
-  "Carrega el mapa indicat ('tiny o 'big) dins l'estat."
-  (let ((mapa-dades (cond
-                     ((equal mapa-nom 'tiny) tiny-map)
-                     ((equal mapa-nom 'big) big-map)
-                     (t (error "Mapa desconegut"))))
-        (amplada (length (first mapa-dades)))
-        (alt (length mapa-dades)))
-    (subst (list 'mapa (list (list 'dades mapa-dades)
-                             (list 'amplada amplada)
-                             (list 'alt alt)))
-           (assoc 'mapa estat)
-           estat)))
-
-
-;; ------------------------------------------------------------------
-;;  ------------------- JUGAR PARTIDA (BUCLE) -------------------
-;; ------------------------------------------------------------------
-
-(defun jugar-partida (estat)
-  "Bucle principal de la partida. Alterna torns fins que hi ha guanyador."
-  (if (es-final estat)
-      (qui-ha-guanyat estat)
-      (let* (;; 1. incrementar pintura a l'INICI del torn 
-             (equip-actual (get-torn-actual estat))
-             (estat1 (incrementar-pintura estat equip-actual))
-
-             ;; 2. executar el torn (totes les unitats de l'equip)
-             (estat2 (executar-torn estat1))
-
-             ;; 3. canviar de torn
-             (estat3 (canviar-equip estat2))
-
-             ;; 4. incrementar ronda quan torna a e1
-             (estat4 (if (eq (get-torn-actual estat3) 'e1)
-                         (incrementar-ronda estat3)
-                         estat3)))
-        (jugar-partida estat4))))
-
-
-
-
-(defun incrementar-ronda (estat)
-  (let ((ronda (cadr (assoc 'ronda estat))))
-    (subst (list 'ronda (+ ronda 1))
-           (assoc 'ronda estat)
-           estat)))
-
-
-(defun es-final (estat)
-  "Retorna t si la partida ha acabat (base destruïda o límit de torns)."
-  (or (>= (get-ronda-actual estat) 1500)
-      (base-destruida estat 'e1)
-      (base-destruida estat 'e2)))
-
-
-
-(defun qui-ha-guanyat (estat)
-  (cond ((base-destruida estat 'e1) 'e2)
-        ((base-destruida estat 'e2) 'e1)
-        (t (comparar-puntuacio estat))))
-
-
-(defun base-destruida (estat equip)
-  "Retorna t si la base de l'equip indicat ha estat destruïda (pintada dels 3 colors)."
-  (let ((base (buscar-base-equip (cadr (assoc 'bases estat)) equip)))
-    (and base
-         (let ((colors (cadr (assoc 'colors-pintat base))))
-           (and (membre 'r colors)
-                (membre 'g colors)
-                (membre 'b colors))))))
-
-(defun buscar-base-equip (bases equip)
-  "Cerca recursivament la base de l'equip indicat."
-  (cond
-    ((null bases) nil)
-    ((eq (cadr (assoc 'equip (car bases))) equip) (car bases))
-    (t (buscar-base-equip (cdr bases) equip))))
-
-
-;; Membre propi per evitar dependències de :test
-(defun membre (element llista)
-  "Comprova si element és a la llista (comparació amb eq)."
-  (cond
-    ((null llista) nil)
-    ((eq element (car llista)) t)
-    (t (membre element (cdr llista)))))
-
-(defun comptar-unitats-equip (unitats equip)
-  "Compta quantes unitats pertanyen a un equip."
-  (if (null unitats)
-      0
-      (+ (if (eq (cadr (assoc 'equip (car unitats))) equip)
-             1
-             0)
-         (comptar-unitats-equip (cdr unitats) equip))))
-
-
-(defun comparar-puntuacio (estat)
-  "Compara punts per decidir l'equip guanyador."
-  (let* ((unitats (cadr (assoc 'unitats estat)))
-
-         ;; comptar bolles per equip (recursiu)
-         (bolles-e1 (comptar-unitats-equip unitats 'e1))
-         (bolles-e2 (comptar-unitats-equip unitats 'e2))
-
-         ;; pintura restant
-         (pintura-e1 (cadr (assoc 'pintura-e1 estat)))
-         (pintura-e2 (cadr (assoc 'pintura-e2 estat))))
-
-    (cond
-      ((> bolles-e1 bolles-e2) 'e1)
-      ((> bolles-e2 bolles-e1) 'e2)
-      ((> pintura-e1 pintura-e2) 'e1)
-      ((> pintura-e2 pintura-e1) 'e2)
-      (t (if (= (random 2) 0) 'e1 'e2)))))
-
-
-
-
-;; ------------------------------------------------------------------
-;;  ------------------- JUGAR PARTIDA -------------------
-;; ------------------------------------------------------------------
-
-(defun executar-torn (estat)
-  "Executa totes les accions de les unitats de l'equip actual en aquest torn, recursivament."
-  (let* ((equip-actual (get-torn-actual estat)) ; torn del equip que esta jugant
-         (unitats (get-unitats-equip estat equip-actual))) ; obtenir unitats del equip
-    
-    ; executar unitats
-    (executar-unitats unitats estat)))
-
-;; Funció auxiliar per obtenir només les unitats de l’equip actual
-(defun get-unitats-equip (estat equip)
-  (filtrar-unitats (cadr (assoc 'unitats estat)) equip))
-
-(defun filtrar-unitats (unitats equip)
-  (if (null unitats)
-      nil
-      (let ((u (car unitats)))
-        (if (eq (cadr (assoc 'equip u)) equip)
-            (cons u (filtrar-unitats (cdr unitats) equip))
-            (filtrar-unitats (cdr unitats) equip)))))
-
-;; Funció auxiliar recursiva per executar accions de cada unitat
-(defun executar-unitats (unitats estat)
-  (if (null unitats)
-      estat ; no hi ha unitats, retornem estat final
-      (let* ((u (car unitats)) ; agafam primera unitat
-             (accio (rebre-accio-agent u estat)) ; quins acció vol fer aquesta unitat
-             (estat2 (if (validar-accio accio estat u) ; mirar si es possible fer l'acció
-                         (executar-accio accio u estat) ; executan si es valida
-                         estat))    ; sino retornem estat actual
-             (estat3 (marcar-unitat-actuada u estat2))) ; marcam unitat actuada per no tornar-la a usar
-        (executar-unitats (cdr unitats) estat3)))) ; recursivitat
-
-;; Funció per marcar la unitat com ha-actuat
-(defun marcar-unitat-actuada (unitat estat)
-  "Marca la unitat dins l'estat com a ha-actuat sense mutar l'estat."
-  (let* ((unitats (cadr (assoc 'unitats estat)))
-         (noves-unitats (marcar-unitat-rec unitats unitat)))
-    ;; Reconstruïm l'estat substituint només el camp 'unitats
-    (substituir-camp 'unitats noves-unitats estat)))
-
-;; Funció recursiva que recorre la llista de unitats i marca la unitat indicada
-(defun marcar-unitat-rec (unitats unitat-a-marcar)
-  "Marca la unitat amb el mateix id que unitat-a-marcar com a ha-actuat."
-  (if (null unitats)
-      nil
-      (let ((u (car unitats)))
-        (if (equal (cadr (assoc 'id u))
-                   (cadr (assoc 'id unitat-a-marcar)))
-            (cons (marcar-unitat-directament u)
-                  (marcar-unitat-rec (cdr unitats) unitat-a-marcar))
-            (cons u
-                  (marcar-unitat-rec (cdr unitats) unitat-a-marcar))))))
-
-
-;; Funció que retorna una unitat amb el camp 'ha-actuat t
-(defun marcar-unitat-directament (unitat)
-  "Retorna la unitat amb (ha-actuat t) sense usar remove-if."
-  (cons (list 'ha-actuat t)
-        (eliminar-ha-actuat unitat)))
-
-(defun eliminar-ha-actuat (unitat)
-  (if (null unitat)
-      nil
-      (let ((camp (car unitat)))
-        (if (eq (car camp) 'ha-actuat)
-            ;; saltam aquest element
-            (eliminar-ha-actuat (cdr unitat))
-            ;; el mantenim
-            (cons camp
-                  (eliminar-ha-actuat (cdr unitat)))))))
-
-; rebre moviment agent  d'una unitat en concret
-(defun rebre-accio-agent (unitat estat)
-  "Demana a l'agent corresponent quina acció vol fer aquesta unitat."
-  
-  (let ((equip (cadr (assoc 'equip unitat))))
-    
-    (cond
-      ;; Agent de l'equip e1
-      ((eq equip 'e1)
-       (agent-e1 estat unitat))
-
-      ;; Agent de l'equip e2
-      ((eq equip 'e2)
-       (agent-e2 estat unitat))
-
-      ;; seguretat per si passa algo estrany
-      (t
-       nil))))
-
-
-(defun validar-accio (accio estat unitat)
-  "Valida si una acció retornada per l'agent és legal.
-   Les accions vàlides són: 'crea-bolla, 'pinta, 'mou, 'escriu-memoria."
-  (let ((nom  (car accio))
-        (args (cadr accio)))
-    (cond
-
-      ;; ACCIÓ: mou  ->  (mou (x y))
-      ((eq nom 'mou)
-       (validar-moviment unitat args estat))
-
-      ;; ACCIÓ: crea-bolla  ->  (crea-bolla (color (x y)))
-      ;;   Només les bases poden crear bolles.
-      ;;   Cal tenir >= 50 pintura.
-      ;;   La coordenada destí ha de ser adjacent i lliure.
-      ((eq nom 'crea-bolla)
-       (and (eq (cadr (assoc 'tipus unitat)) 'base)
-            (>= (get-pintura-actual estat (cadr (assoc 'equip unitat))) 50)
-            (let ((dest (cadr args)))
-              (and dest
-                   (es-posicio-lliure dest estat)
-                   (<= (distancia-quadrat (cadr (assoc 'coord unitat)) dest) 2)))))
-
-      ;; ACCIÓ: pinta  ->  (pinta ((x y)))
-      ;;   Només les bolles poden pintar.
-      ;;   La casella destí ha d'estar dins rang r_pintar = 5 u².
-      ((eq nom 'pinta)
-       (and (eq (cadr (assoc 'tipus unitat)) 'bolla)
-            (< (cadr (assoc 'tr-pintar unitat)) 1)
-            (let ((dest (car args)))
-              (and dest
-                   (not (es-aigua dest estat))
-                   (<= (distancia-quadrat (cadr (assoc 'coord unitat)) dest) 5)))))
-
-      ;; ACCIÓ: escriu-memoria  ->  sempre vàlida (el controlador aplicara limit d'atoms)
-      ((eq nom 'escriu-memoria) t)
-
-      (t nil))))
-
-(defun distancia-quadrat (a b)
-  "Calcula la distància euclidiana al quadrat entre dues coordenades."
-  (let ((dx (- (car a) (car b)))
-        (dy (- (cadr a) (cadr b))))
-    (+ (* dx dx) (* dy dy))))
-
-
-(defun executar-accio (accio unitat estat)
-  "Executa l'acció validada de la unitat i retorna l'estat actualitzat."
-  (let ((nom  (car accio))
-        (args (cadr accio)))
-    (cond
-      ((eq nom 'mou)
-       (moure-bolla unitat (car args) estat))
-
-      ((eq nom 'crea-bolla)
-       (crear-bolla estat
-                    (cadr (assoc 'equip unitat))
-                    (car args)))  ;; args = (color (x y))
-
-      ((eq nom 'pinta)
-       (aplicar-pintura unitat (car args) estat))
-
-      ((eq nom 'escriu-memoria)
-       (substituir-camp 'memoria-compartida (car args) estat))
-
-      (t estat))))  ;; acció desconeguda -> no fer res
-
-
-
-
-
-;; ------------------------------------------------------------------
-;;  ------------------- GETTERS DE L'ESTAT ACTUAL -------------------
-;; ------------------------------------------------------------------
-
-;; Retorna l'estat complet (ara rep l'estat per paràmetre, funcional)
-(defun get-estat-actual (estat)
-  "Retorna l'estat complet del joc."
-  estat)
-
-(defun get-ronda-actual (estat)
-  "Retorna el número de ronda actual."
-  (cadr (assoc 'ronda estat)))
-
-(defun get-torn-actual (estat)
-  (cadr (assoc 'torn estat))
-)
-
-
-(defun get-pintura-actual (estat equip)
-"Retorna la pintura actual de l'equip 'e1 o 'e2."
-  (cadr
-   (assoc
-    (if (eq equip 'e1)
-        'pintura-e1
-        'pintura-e2)
-    estat)))
-
-;; Retorna l'id d'una unitat (bolla o base)
-(defun get-bolla-id (unitat)
-  "Retorna l'id únic d'una unitat."
-  (cadr (assoc 'id unitat)))
-
-;; GET COLORS PINTATS (bolla, base)
-;; Retorna la llista de colors dels quals una unitat està pintada
-(defun get-colors-pintats (unitat)
-  "Retorna la llista de colors dels quals la unitat està pintada (pot ser buida)."
-  (cadr (assoc 'colors-pintat unitat)))
-
-;; get suma bolles per equip
-(defun get-suma-bolles-equip (estat equip)
-  "Retorna el nombre de bolles vives de l'equip indicat."
-  (get-suma-bolles-rec (cadr (assoc 'unitats estat)) equip))
-
-
-(defun get-suma-bolles-rec (unitats equip)
-  "Funció recursiva auxiliar per comptar bolles d'un equip."
-  (cond
-    ((null unitats) 0)
-    ;; Només comptem bolles (no bases) de l'equip
-    ((and (eq (cadr (assoc 'equip (car unitats))) equip)
-          (eq (cadr (assoc 'tipus (car unitats))) 'bolla))
-     (+ 1 (get-suma-bolles-rec (cdr unitats) equip)))
-    (t
-     (get-suma-bolles-rec (cdr unitats) equip))))
-
-;; Compta quants laboratoris té capturats un equip
-(defun get-suma-laboratoris-equip (estat equip)
-  "Retorna el nombre de laboratoris capturats per l'equip indicat."
-  (get-suma-labs-rec (cadr (assoc 'laboratoris estat)) equip))
-
-(defun get-suma-labs-rec (labs equip)
-  "Funció recursiva auxiliar per comptar laboratoris capturats."
-  (cond
-    ((null labs) 0)
-    ((eq (cadr (assoc 'equip (car labs))) equip)
-     (+ 1 (get-suma-labs-rec (cdr labs) equip)))
-    (t
-     (get-suma-labs-rec (cdr labs) equip))))
-
-;; Retorna el temps de recuperació d'una acció concreta d'una unitat
-(defun get-temps-recuperacio (unitat tipus-accio)
-  "Retorna el temps de recuperació associat a una acció d'una unitat."
-  (cond
-    ((eq tipus-accio 'pintar) (cadr (assoc 'tr-pintar unitat)))
-    ((eq tipus-accio 'moure)  (cadr (assoc 'tr-moure  unitat)))
-    (t nil)))
-
-
-;; ------------------------------------------------------------------
-;;  ------------------- GESTIÓ DE TORNS ------------------- 
-;; ------------------------------------------------------------------
-
-
-
-;(defun canviar-equip ()
-  ;(setf (cadr (assoc 'torn *estat*))
-   ;     (cond
-  ;        ((eq (get-torn-actual) 'e1) 'e2)
- ;         ((eq (get-torn-actual) 'e2) 'e1)))
-;)
-(defun canviar-equip (estat)
-  "Canvia el torn de l'equip actual sense usar subst."
-  (let* ((torn-actual (cadr (assoc 'torn estat)))
-         (nou-torn (if (eq torn-actual 'e1)
-                       'e2
-                       'e1)))
-    
-    ;; reconstruïm estat canviant només el camp 'torn
-    (canviar-torn-rec estat nou-torn)))
-
-(defun canviar-torn-rec (estat nou-torn)
-  (if (null estat)
-      nil
-      (let ((element (car estat)))
-        (if (eq (car element) 'torn)
-            ;; substituïm el camp torn
-            (cons (list 'torn nou-torn)
-                  (cdr estat))
-            ;; deixam igual i continuam recursivament
-            (cons element
-                  (canviar-torn-rec (cdr estat) nou-torn))))))
-
-
-
-; increment de pintura +1 per torn
-; increment de pintura +2 per cada laboratori
-(defun incrementar-pintura (estat equip)
-  "Incrementa la pintura de l'equip: +2 base + +1 per cada laboratori capturat."
-  (let* ((clau (if (eq equip 'e1) 'pintura-e1 'pintura-e2))
-         (labs-capturats (get-suma-laboratoris-equip estat equip))
-         (increment (+ 2 labs-capturats)))
-    (incrementar-pintura-rec estat clau increment)))
-
-(defun incrementar-pintura-rec (estat clau increment)
-  "Funció recursiva auxiliar que suma l'increment al camp de pintura."
+(defun substituir-camp (clau valor estat)
   (cond
     ((null estat) nil)
     ((eq (caar estat) clau)
-     (cons (list clau (+ (cadr (car estat)) increment)) (cdr estat)))
+     (cons (list clau valor)
+           (cdr estat)))
     (t
-     (cons (car estat) (incrementar-pintura-rec (cdr estat) clau increment)))))
-
-
-(defun decrementar-pintura (quantitat equip estat)
-  "Decrementa certa quantitat de pintura de l'equip indicat."
-  (let* ((clau (if (eq equip 'e1) 'pintura-e1 'pintura-e2))
-         (actual (cadr (assoc clau estat)))
-         (nou (max 0 (- actual quantitat))))
-    (decrementar-pintura-rec estat clau nou)))
-
-(defun decrementar-pintura-rec (estat clau nou-valor)
-  "Funció recursiva auxiliar que substitueix el valor de pintura."
-  (cond
-    ((null estat) nil)
-    ((eq (caar estat) clau)
-     (cons (list clau nou-valor) (cdr estat)))
-    (t
-     (cons (car estat) (decrementar-pintura-rec (cdr estat) clau nou-valor)))))
+     (cons (car estat)
+           (substituir-camp clau valor (cdr estat))))))
 
 
 
-;; ------------------------------------------------------------------
-;;  ------------------- GESTIÓ DE MAPA ------------------- 
-;; ------------------------------------------------------------------
 
 ;; Retorna el tipus de casella ('terra o 'aigua) a partir de les dades del mapa
 (defun get-tipus-casella (coord estat)
@@ -644,6 +181,514 @@
     ((equal coord (cadr (assoc 'coord (car labs)))) t)
     (t (es-laboratori-rec coord (cdr labs)))))
 
+;; Comprova si una casella és d'aigua
+(defun es-aigua (coord estat)
+  "Retorna t si la casella de la coordenada indicada és d'aigua, nil altrament."
+  (eq (get-tipus-casella coord estat) 'aigua))
+;; ------------------------------------------------------------------
+;;  ------------------- POSICIONS FIXES I ALEATÒRIES -------------------
+;; ------------------------------------------------------------------
+
+;; POSICIONS BASES
+(defun posicions-bases-classic () '((1 1) (10 10))) ; Revisar que en ambos mapas funcionen.
+
+(defun posicions-bases-aleatori (estat)
+  (list (coord-lliure-aleatoria estat) ;; REVISAR QUE NO ES COLOQUIN 2 BASES AL MATEIX LLOC (I TAMBE ELS LABS)
+        (coord-lliure-aleatoria estat)))
+
+;; POSICIONS LABORATORIS
+(defun posicions-labs-classic ()
+  '((5 5) (7 3) (2 8) (3 4) (6 7) (8 2) (1 9) (9 1) (4 6) (10 5))) ; Revisar que en ambos mapas funcionen.
+
+(defun posicions-labs-aleatori (estat)
+  "Genera 10 posicions aleatòries lliures per als laboratoris."
+  (generar-coords-aleatories 10 estat))
+
+
+;; GENERACIÓ DE COORDENADES
+(defun generar-coords-aleatories (n estat)
+  "Genera recursivament n coordenades aleatòries lliures."
+  (if (= n 0)
+      nil
+      (cons (coord-lliure-aleatoria estat)
+            (generar-coords-aleatories (- n 1) estat))))
+
+(defun coord-lliure-aleatoria (estat) ; POTSER en el mapa gran tardi molt la recursió, REVISAR!!!
+  (let* ((mapa (cadr (assoc 'mapa estat)))
+         (amplada (cadr (assoc 'amplada mapa)))
+         (alt (cadr (assoc 'alt mapa)))
+         (coord (list (random amplada) (random alt))))
+    (if (es-posicio-lliure coord estat)
+        coord
+        (coord-lliure-aleatoria estat))))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+;; ------------------------------------------------------------------
+;;  ------------------- CARREGAR MAPA -------------------
+;; ------------------------------------------------------------------
+(defun carregar-mapa (estat mapa-nom)
+  "Carrega el mapa indicat ('tiny o 'big) dins l'estat."
+  (let ((mapa-dades (cond
+                     ((equal mapa-nom 'tiny) tiny-map)
+                     ((equal mapa-nom 'big) big-map)
+                     (t (error "Mapa desconegut"))))
+        (amplada (length (first mapa-dades)))
+        (alt (length mapa-dades)))
+    (subst (list 'mapa (list (list 'dades mapa-dades)
+                             (list 'amplada amplada)
+                             (list 'alt alt)))
+           (assoc 'mapa estat)
+           estat)))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+;; ------------------------------------------------------------------
+;;  ------------------- JUGAR PARTIDA (BUCLE) -------------------
+;; ------------------------------------------------------------------
+
+(defun jugar-partida (estat)
+  "Bucle principal de la partida. Alterna torns fins que hi ha guanyador."
+  (if (es-final estat)
+      (qui-ha-guanyat estat)
+      (let* (;; 1. incrementar pintura a l'INICI del torn 
+             (equip-actual (get-torn-actual estat))
+             (estat1 (incrementar-pintura estat equip-actual))
+
+             ;; 2. executar el torn (totes les unitats de l'equip)
+             (estat2 (executar-torn estat1))
+
+             ;; 3. canviar d'equip (torn)
+             (estat3 (canviar-torn estat2))
+
+             ;; 4. incrementar ronda quan torna a e1 **FEIM AQUESTA COMPARACIÓ PER FER AMPLIACIONS SOBRE LA QUANTITAT D'EQUIPS JUGANT
+             (estat4 (if (eq (get-torn-actual estat3) 'e1)
+                         (incrementar-ronda estat3)
+                         estat3)))
+        (jugar-partida estat4))))
+
+
+;; INCREMENTAM LA PINTURA
+; increment de pintura +1 per torn
+; increment de pintura +2 per cada laboratori
+(defun incrementar-pintura (estat equip)
+  "Incrementa la pintura de l'equip: +2 base + +1 per cada laboratori capturat."
+  (let* ((clau (if (eq equip 'e1) 'pintura-e1 'pintura-e2))
+         (labs-capturats (comptar-laboratoris-equip estat equip))
+         (increment (+ 2 labs-capturats)))
+    (incrementar-pintura-rec estat clau increment)))
+
+
+(defun incrementar-pintura-rec (estat clau increment)
+  "Funció recursiva auxiliar que suma l'increment al camp de pintura."
+  (cond
+    ((null estat) nil)
+    ((eq (caar estat) clau)
+     (cons (list clau (+ (cadr (car estat)) increment)) (cdr estat)))
+    (t
+     (cons (car estat) (incrementar-pintura-rec (cdr estat) clau increment)))))
+
+
+;; CANVIAR TORN DE L'EQUIP
+(defun canviar-torn (estat)
+  "Canvia el torn de l'equip actual sense usar subst."
+  (let* ((torn-actual (cadr (assoc 'torn estat)))
+         (nou-torn (if (eq torn-actual 'e1)
+                       'e2
+                       'e1)))
+    
+    ;; reconstruïm estat canviant només el camp 'torn
+    (canviar-torn-rec estat nou-torn)))
+
+(defun canviar-torn-rec (estat nou-torn)
+  (if (null estat)
+      nil
+      (let ((element (car estat)))
+        (if (eq (car element) 'torn)
+            ;; substituïm el camp torn
+            (cons (list 'torn nou-torn)
+                  (cdr estat))
+            ;; deixam igual i continuam recursivament
+            (cons element
+                  (canviar-torn-rec (cdr estat) nou-torn))))))
+
+
+
+;; INCREMENTAR RONDA
+(defun incrementar-ronda (estat)
+  (incrementar-ronda-rec estat))
+
+(defun incrementar-ronda-rec (estat)
+  (cond
+    ((null estat) nil)
+    ((eq (caar estat) 'ronda)
+     (cons (list 'ronda (+ (cadr (car estat)) 1))
+           (cdr estat)))
+    (t
+     (cons (car estat)
+           (incrementar-ronda-rec (cdr estat))))))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+;; ------------------------------------------------------------------
+;;  ------------------- REVISIÓ FINAL PARTIDA -------------------
+;; ------------------------------------------------------------------
+;; REVISAR SI S'HA ACABAT LA PARTIDA
+(defun es-final (estat)
+  "Retorna t si la partida ha acabat (base destruïda o límit de torns)."
+  (or (>= (get-ronda-actual estat) 1500)
+      (base-destruida estat 'e1)
+      (base-destruida estat 'e2)))
+
+;; REVISAR QUI HA GUANYAT
+(defun qui-ha-guanyat (estat)
+  (cond ((base-destruida estat 'e1) 'e2)
+        ((base-destruida estat 'e2) 'e1)
+        (t (comparar-puntuacio estat))))
+
+(defun base-destruida (estat equip)
+  "Retorna t si la base ha estat completament pintada (r g b)."
+  (let ((base (get-base-equip (cadr (assoc 'bases estat)) equip)))
+    (and base
+         (pintada-3-colors base))))
+
+;; Membre propi per evitar dependències de :test
+;; Revisar si un element està a una llista
+;(defun membre (element llista)
+;  "Comprova si element és a la llista (comparació amb eq)."
+;  (cond
+;    ((null llista) nil)
+;    ((eq element (car llista)) t)
+;    (t (membre element (cdr llista)))))
+
+(defun comparar-puntuacio (estat)
+"Compara punts per decidir l'equip guanyador."
+  (let* ((bolles-e1 (get-bolles-equip estat 'e1))
+         (bolles-e2 (get-bolles-equip estat 'e2))
+         (pintura-e1 (cadr (assoc 'pintura-e1 estat)))
+         (pintura-e2 (cadr (assoc 'pintura-e2 estat))))
+
+    (cond
+      ((> bolles-e1 bolles-e2) 'e1)
+      ((> bolles-e2 bolles-e1) 'e2)
+      ((> pintura-e1 pintura-e2) 'e1)
+      ((> pintura-e2 pintura-e1) 'e2)
+      (t (if (= (random 2) 0) 'e1 'e2)))))      
+
+
+
+
+
+
+
+
+;; ------------------------------------------------------------------
+;;  ------------------- EXECUTAR TORN -------------------
+;; ------------------------------------------------------------------
+
+(defun executar-torn (estat)
+  (let* ((equip (get-torn-actual estat))
+         (dades (preparar-dades estat equip))
+         (accio-list (if (eq equip 'e1)
+                         (agent-e1 dades)
+                         (agent-e2 dades))))
+    (executar-accions accio-list estat)))
+
+
+(defun executar-accions (accions estat)
+  (if (null accions)
+      estat
+      (let* ((accio (car accions))
+             (estat2 (if (validar-accio accio estat)
+                         (executar-accio accio nil estat)
+                         estat)))
+        (executar-accions (cdr accions) estat2))))
+
+
+
+(defun validar-accio (accio estat unitat)
+  (let ((nom (car accio))
+        (args (cadr accio)))
+
+    (cond
+
+      ;; ---------------- MOVIMENT ----------------
+      ((eq nom 'mou)
+       (and unitat
+            (validar-moviment unitat args estat)))
+
+      ;; ---------------- CREA BOLLA ----------------
+      ((eq nom 'crea-bolla)
+       (and unitat
+            (eq (cadr (assoc 'tipus unitat)) 'base)
+            (>= (get-pintura-actual estat
+                 (cadr (assoc 'equip unitat))) 50)
+            (let ((dest (car args)))
+              (and dest
+                   (es-posicio-lliure dest estat)))))
+
+      ;; ---------------- PINTA ----------------
+      ((eq nom 'pinta)
+       (and unitat
+            (eq (cadr (assoc 'tipus unitat)) 'bolla)
+            (< (cadr (assoc 'tr-pintar unitat)) 1)
+            (let ((dest (car args)))
+              (and dest
+                   (not (es-aigua dest estat))))))
+
+      ;; ---------------- MEMÒRIA ----------------
+      ((eq nom 'escriu-memoria)
+       t)
+
+      ;; ---------------- ERROR ----------------
+      (t nil))))
+
+
+(defun executar-accio (accio unitat estat)
+  (let ((nom (car accio))
+        (args (cadr accio)))
+    (cond
+      ((eq nom 'mou)
+       (moure-bolla unitat (car args) estat))
+
+      ((eq nom 'crea-bolla)
+       (crear-bolla estat (cadr (assoc 'equip estat)) (car args)))
+
+      ((eq nom 'pinta)
+       (aplicar-pintura unitat (car args) estat))
+
+      ((eq nom 'escriu-memoria)
+       (substituir-camp 'memoria-compartida (car args) estat))
+
+      (t estat))))
+
+
+(defun preparar-dades (estat equip)
+  "Construeix la informació que rep l'agent per decidir el torn."
+
+  (list
+    ;; ---------------- INFO GLOBAL ----------------
+    (cadr (assoc 'ronda estat))
+    equip
+
+    ;; ---------------- ESTAT EQUIP ----------------
+    (get-bolles-equip estat equip)
+    (get-laboratoris-equip estat equip)
+    (get-pintura-actual estat equip)
+
+    ;; ---------------- UNITATS ----------------
+    (cadr (assoc 'unitats estat))
+
+    ;; ---------------- MAPA / ALTRES ----------------
+    (cadr (assoc 'mapa estat))
+
+    ;; ---------------- BASES ----------------
+    (cadr (assoc 'bases estat))
+
+    ;; ---------------- MEMÒRIA ----------------
+    (cadr (assoc 'memoria-compartida estat))))
+
+
+;(defun distancia-quadrat (a b)
+;  "Calcula la distància euclidiana al quadrat entre dues coordenades."
+;  (let ((dx (- (car a) (car b)))
+;        (dy (- (cadr a) (cadr b))))
+;    (+ (* dx dx) (* dy dy))))
+
+
+
+
+;; ------------------------------------------------------------------
+;;  ------------------- GETTERS DE L'ESTAT ACTUAL -------------------
+;; ------------------------------------------------------------------
+
+;; Retorna l'estat complet (ara rep l'estat per paràmetre, funcional)
+(defun get-estat-actual (estat)
+  "Retorna l'estat complet del joc."
+  estat)
+
+(defun get-ronda-actual (estat)
+  "Retorna el número de ronda actual."
+  (cadr (assoc 'ronda estat)))
+
+(defun get-torn-actual (estat)
+  (cadr (assoc 'torn estat))
+)
+
+
+(defun get-pintura-actual (estat equip)
+"Retorna la pintura actual de l'equip 'e1 o 'e2."
+  (cadr
+   (assoc
+    (if (eq equip 'e1)
+        'pintura-e1
+        'pintura-e2)
+    estat)))
+
+;; Retorna l'id d'una unitat (bolla o base)
+(defun get-bolla-id (unitat)
+  "Retorna l'id únic d'una unitat."
+  (cadr (assoc 'id unitat)))
+
+;; GET COLORS PINTATS (bolla, base)
+;; Retorna la llista de colors dels quals una unitat està pintada
+(defun get-colors-pintats (unitat)
+  "Retorna la llista de colors dels quals la unitat està pintada (pot ser buida)."
+  (cadr (assoc 'colors-pintat unitat)))
+
+
+(defun get-unitats-equip (unitats equip)
+  (cond
+    ((null unitats) nil)
+    ((eq (cadr (assoc 'equip (car unitats))) equip)
+     (cons (car unitats)
+           (get-unitats-equip (cdr unitats) equip)))
+    (t
+     (get-unitats-equip (cdr unitats) equip))))
+
+
+(defun get-bolles-equip (estat equip)
+  "Retorna el nombre de bolles vives d'un equip."
+  (comptar-unitats-equip
+    (cadr (assoc 'unitats estat))
+    equip
+    t))  ; t indica que només compti bolles vives
+
+
+
+
+;; Funció auxiliar per obtenir només les unitats de l’equip actual
+(defun get-unitats-equip (estat equip)
+  (filtrar-unitats (cadr (assoc 'unitats estat)) equip))
+
+(defun filtrar-unitats (unitats equip)
+  (if (null unitats)
+      nil
+      (let ((u (car unitats)))
+        (if (eq (cadr (assoc 'equip u)) equip)
+            (cons u (filtrar-unitats (cdr unitats) equip))
+            (filtrar-unitats (cdr unitats) equip)))))
+
+
+(defun comptar-laboratoris-equip (estat equip) ;*** NO ES UN GETTER LUEGO MOVERLO A OTRO SITIO
+  (comptar-laboratoris (cadr (assoc 'laboratoris estat)) equip))
+
+
+(defun get-base-equip (bases equip) 
+  "Cerca recursivament la base de l'equip indicat."
+  (cond
+    ((null bases) nil)  ;; si ja no hi ha més bases, retorna nil
+    ((eq (cadr (assoc 'equip (car bases))) equip) (car bases))  ;; si coincideix l'equip, retorna la base
+    (t (get-base-equip (cdr bases) equip))))  ;; sinó, continua amb la resta
+
+
+;; Retorna el temps de recuperació d'una acció concreta d'una unitat
+(defun get-temps-recuperacio (unitat tipus-accio)
+  "Retorna el temps de recuperació associat a una acció d'una unitat."
+  (cond
+    ((eq tipus-accio 'pintar) (cadr (assoc 'tr-pintar unitat)))
+    ((eq tipus-accio 'moure)  (cadr (assoc 'tr-moure  unitat)))
+    (t nil)))
+
+
+;; ------------------------------------------------------------------
+;;  ------------------- GESTIÓ DE TORNS ------------------- 
+;; ------------------------------------------------------------------
+
+
+
+
+(defun decrementar-pintura (quantitat equip estat)
+  "Decrementa certa quantitat de pintura de l'equip indicat."
+  (let* ((clau (if (eq equip 'e1) 'pintura-e1 'pintura-e2))
+         (actual (cadr (assoc clau estat)))
+         (nou (max 0 (- actual quantitat))))
+    (decrementar-pintura-rec estat clau nou)))
+
+(defun decrementar-pintura-rec (estat clau nou-valor)
+  "Funció recursiva auxiliar que substitueix el valor de pintura."
+  (cond
+    ((null estat) nil)
+    ((eq (caar estat) clau)
+     (cons (list clau nou-valor) (cdr estat)))
+    (t
+     (cons (car estat) (decrementar-pintura-rec (cdr estat) clau nou-valor)))))
+
+
+
+;; ------------------------------------------------------------------
+;;  ------------------- GESTIÓ DE MAPA PARTIDA ------------------- 
+;; ------------------------------------------------------------------
+
+;; Revisions durant la partida
+
 
 ;; Comprova si hi ha una base enemiga a una coordenada
 (defun es-base-enemiga (coord equip-propi estat)
@@ -661,10 +706,7 @@
 
 
 
-;; Comprova si una casella és d'aigua
-(defun es-aigua (coord estat)
-  "Retorna t si la casella de la coordenada indicada és d'aigua, nil altrament."
-  (eq (get-tipus-casella coord estat) 'aigua))
+
 
 ;; Comprova si hi ha una bolla enemiga a una coordenada
 (defun es-bolla-enemiga (coord equip-propi estat)
@@ -718,53 +760,6 @@
     ((equal coord (car llista)) t)
     (t (coord-a-llista coord (cdr llista)))))
 
-;; FUNCIONS DE MODIFICACIÓ DE MAPA --> potser vagin dins grafis.lsp!!!!
-;; Pinta una casella del color indicat (retorna estat actualitzat, no mutat)
-(defun pintar-casella (coord color estat)
-  "Pinta la casella de la coordenada indicada del color donat.
-   Actualitza el color de la casella al mapa."
-  (let* ((mapa      (cadr (assoc 'mapa estat)))
-         (dades     (cadr (assoc 'dades mapa)))
-         (amplada   (cadr (assoc 'amplada mapa)))
-         (alt       (cadr (assoc 'alt mapa)))
-         ;; reconstruïm el mapa amb la casella pintada
-         (dades-noves (pintar-casella-dades coord color dades))
-         (mapa-nou  (list (list 'dades    dades-noves)
-                          (list 'amplada  amplada)
-                          (list 'alt      alt))))
-    ;; reconstruïm l'estat amb el nou mapa
-    (substituir-camp 'mapa mapa-nou estat)))
-
-(defun pintar-casella-dades (coord color dades)
-  "Reconstrueix la matriu del mapa pintant la casella (x,y) del color indicat.
-   Cada cel·la del mapa és una llista: (tipus-casella color-casella)"
-  (let ((x (car coord))
-        (y (cadr coord)))
-    (pintar-fila-rec dades x y color 0)))
-
-(defun pintar-fila-rec (files x y color fila-actual)
-  "Recorre les files del mapa recursivament fins trobar la fila y."
-  (cond
-    ((null files) nil)
-    ((= fila-actual y)
-     (cons (pintar-columna-rec (car files) x color 0)
-           (pintar-fila-rec (cdr files) x y color (+ fila-actual 1))))
-    (t
-     (cons (car files)
-           (pintar-fila-rec (cdr files) x y color (+ fila-actual 1))))))
-
-(defun pintar-columna-rec (fila x color col-actual)
-  "Recorre les columnes d'una fila recursivament fins trobar la columna x."
-  (cond
-    ((null fila) nil)
-    ((= col-actual x)
-     ;; La cel·la és (tipus-casella color-casella); actualitzem el color
-     (cons (list (car (car fila))   ;; mantenim el tipus ('terra o 'aigua)
-                 color)             ;; actualitzem el color
-           (pintar-columna-rec (cdr fila) x color (+ col-actual 1))))
-    (t
-     (cons (car fila)
-           (pintar-columna-rec (cdr fila) x color (+ col-actual 1))))))
 
 ;; =================================================================
 ;;  UTILITAT: substituir-camp 
@@ -785,6 +780,32 @@
     (t
      (cons (car llista)
            (substituir-camp-rec clau valor (cdr llista))))))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 ;; ------------------------------------------------------------------
@@ -821,7 +842,7 @@
 (defun buscar-posicio-lliure-base (estat equip)
   "Cerca la primera casella lliure adjacent (d2 <= 2) a la base de l'equip.
    Retorna la coordenada lliure o nil si no n'hi ha cap."
-  (let* ((base  (buscar-base-equip (cadr (assoc 'bases estat)) equip))
+  (let* ((base  (get-base-equip (cadr (assoc 'bases estat)) equip))
          (coord (cadr (assoc 'coord base)))
          (bx    (car coord))
          (by    (cadr coord)))
@@ -887,8 +908,20 @@
 
 )
 
+;; REVISAR SI LA BOLLA/BASE ESTÀ PINTADA DE 3 COLORS
+(defun pintada-3-colors (unitat)
+  "Retorna t si la unitat té els colors r, g i b."
+  (let ((colors (cadr (assoc 'colors-pintat unitat))))
+    (and (te-color 'r colors)
+         (te-color 'g colors)
+         (te-color 'b colors))))
 
-
+(defun te-color (color llista)
+  "Comprova recursivament si un color és a la llista."
+  (cond
+    ((null llista) nil)
+    ((eq color (car llista)) t)
+    (t (te-color color (cdr llista)))))
 
 
 ;; ------------------------------------------------------------------
