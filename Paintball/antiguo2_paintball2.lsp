@@ -15,6 +15,45 @@
 ; (load 'agent-abc123)
 ; (load 'agent-xyz999)
 
+
+;; Estructura mapa (máximo que pueden contener):
+; ------------------------ BASE
+; Estructura final:
+; (terra color (base equip tr-crear colors-pintat))
+
+; Ejemplo inicio:
+;(terra r base e1)
+
+; Ejemplo transformado:
+;(terra r (base e1 0 ()))
+
+; ------------------------ BOLLA: 
+; Estructura final:
+; (terra color bolla equip id colors-pintat color-propi tr-pintar tr-moure)
+
+; Ejemplo inicio:
+;(terra r bolla e1 1 ())
+
+; Ejemplo transformado:
+;(terra 'r bolla 'e1 3 '(r g) 'r 2 0)
+
+
+
+; ------------------------ LAB
+; Estructura final:
+; (terra color (lab equip))
+
+; Ejemplo inicio:
+; (terra g lab)
+
+; Ejemplo transformado:
+; (terra g (lab nil))
+
+; ------------------------ VACÍA
+; (terra b)
+; (terra r)
+; (terra g)
+; (aigua)
 ;; ------------------------------------------------------------------
 ;;  ------------------- INICIAR PARTIDA -------------------
 ;; ------------------------------------------------------------------
@@ -31,6 +70,12 @@
 ; ------------------------------------------------------------------
 ;;  ------------------- CREAR ESTAT INICIAL -------------------
 ;; ------------------------------------------------------------------
+
+;; mapa --> añadir unitats durante la partida
+;; crear lista estado --> id colors-pintat color-propi tr-pintar tr-mouren 
+
+;; laboratoris equip? on ho ficam
+
 
 (defun crear-estat-inicial ()
   "construeix l'estructura base de l'estat de joc."
@@ -81,7 +126,11 @@
            (substituir-camp clau valor (cdr estat))))))
 
 
-
+(defun get-pintura-actual (estat equip) ;; USARLO EN OTROS MÉTODOOOS
+  (cadr (assoc (if (eq equip 'e1)
+                   'pintura-e1
+                   'pintura-e2)
+               estat)))
 
 ;; ------------------------------------------------------------------
 ;;  ------------------- JUGAR PARTIDA (BUCLE) -------------------
@@ -302,21 +351,21 @@
 
 
 ;; Mètode preparar-dades: prepara el paquet de dades que rep l'agent.  --> REVISAR AQUEST MÈTODE
-(defun preparar-dades (estat equip)
-  "prepara el paquet de dades que rep l'agent."
-  (list
+;(defun preparar-dades (estat equip)
+;  "prepara el paquet de dades que rep l'agent."
+;  (list
     ;; info global
-    (cadr (assoc 'ronda estat))
-    equip
+;    (cadr (assoc 'ronda estat))
+;    equip
 
     ;; recursos
-    (get-pintura-actual estat equip)
+;    (get-pintura-actual estat equip) ; este metodo no lo tenemos de momento
 
     ;; mapa visible (o mapa entero de momento)
-    (get-mapa-dades estat)
+ ;   (get-mapa-dades estat)
 
     ;; memoria
-    (cadr (assoc 'memoria-compartida estat))))
+  ;  (cadr (assoc 'memoria-compartida estat))))
 
 ;; ------------------------------------------------------------------
 ;;  ------------------- VALIDAR ACCIONS ------------------- REVISAR!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -347,30 +396,77 @@
 (defun validar-moure (args estat equip)
   (let* ((id (car args))
          (dest (cadr args))
-         (bolla (trobar-bolla id estat)))
+
+         ;; cache mapa (IMPORTANTE)
+         (mapa (get-mapa-dades estat))
+
+         ;; 1 scan mapa
+         (bolla (trobar-bolla id estat))
+
+         ;; 1 lookup reutilizable
+         (c (get-casella mapa dest)))
 
     (and
-     ;; 1. existe la bolla
      bolla
 
-     ;; 2. es del equipo correcto --> nose si hacer un método, de momento no
      (eq (cadddr bolla) equip)
 
-     ;; 3. destino válido (dentro mapa)
      (posicio-valida dest estat)
 
-     ;; 4. destino NO agua
-     (not (es-aigua dest estat))
-
-     ;; 5. destino libre (no base, lab, bolla)
+     c
+     (not (es-aigua-casella c))
      (es-posicio-lliure dest estat)
 
-     ;; 6. movimiento válido (adyacente)
      (let ((origen (get-coord-bolla bolla)))
        (member dest (adjacents origen) :test #'equal))
 
-     ;; 7. cooldown
      (< (get-tr-moure bolla) 1))))
+
+
+
+
+;; ------------------------------------------------------------------
+;;  ------------------- VALIDAR PINTAR -------------------
+;; ------------------------------------------------------------------
+
+; Pintar: sí lab, sí base, sí pintura, dins mapa, que sea bola enemiga
+; un bolla, si pinta, no gasta pintura
+(defun validar-pintar (args estat equip)
+  (let* ((id (car args))
+         (dest (cadr args))
+
+         ;; 🔹 cache del mapa (1 sola vez)
+         (mapa (get-mapa-dades estat))
+
+         ;; 🔹 bolla (1 recorrido del mapa)
+         (bolla (trobar-bolla id estat))
+
+         ;; 🔹 casilla destino (1 acceso)
+         (c (get-casella mapa dest)))
+
+    (and
+     ;; 1. existe
+     bolla
+
+     ;; 2. equipo
+     (es-bolla-del-equip bolla equip)
+
+     ;; 3. cooldown
+     (< (get-tr-pintar (casella-bolla bolla)) 1)
+
+     ;; 4. dentro mapa
+     (posicio-valida dest estat)
+
+     ;; 5. rango
+     (let ((origen (get-coord-bolla bolla)))
+       (<= (distancia origen dest) 5))
+
+     ;; 6. hay algo en destino (no hace falta revisar si es agua pq no habria nada en el destino)
+     c
+
+     ;; 8. no es tuyo
+     (not (bolla-del-equip c equip)))))
+
 
 
 
@@ -379,28 +475,67 @@
 ;;  ------------------- VALIDAR CREAR BOLLA -------------------
 ;; ------------------------------------------------------------------
 
-; Crear bolla: Pintura suficient, base no ocupada per costats, dins mapa (per si s'afegeixen mapes futurs en cantons)
+; Crear bolla: Pintura suficient, base no ocupada per costats, dins mapa
+(defun validar-crea-bolla (args estat equip)
+  (let* ((dest (car args))
+
+         ;; 🔹 cache mapa (1 acceso)
+         (mapa (get-mapa-dades estat))
+
+         ;; 🔹 base del equipo (1 búsqueda)
+         (base (trobar-base equip estat))
+
+         ;; 🔹 casilla destino (1 acceso)
+         (c (get-casella mapa dest)))
+
+    (and
+     ;; 1. existe base
+     base
+
+     ;; 2. cooldown creación
+     (< (get-tr-crear base) 1)
+
+     ;; 3. pintura suficiente
+     (>= (get-pintura-actual estat equip) 50)
+
+     ;; 4. dentro del mapa
+     (posicio-valida dest estat)
+
+     ;; 5. destino existe
+     c
+
+     ;; 6. no agua
+     (not (es-aigua-casella c))
+
+     ;; 7. adyacente a la base (8 direcciones)
+     (let ((origen (get-coord-base base)))
+       (member dest (adjacents origen) :test #'equal))
+
+     ;; 8. casilla libre (no base, lab, bolla)
+     (es-posicio-lliure dest estat))))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
 ;; ------------------------------------------------------------------
-;;  ------------------- VALIDAR PINTAR -------------------
-;; ------------------------------------------------------------------
-
-; Pintar: Pintura suficient, sí lab, sí base, sí pintura, dins mapa
-
-;; Mètode es-pintable: indica si la casella admet l'acció de pintar.
-(defun es-pintable (pos estat)
-  "indica si la casella admet l'acció de pintar."
-  (let ((c (get-casella (get-mapa-dades estat) pos)))
-    (and c
-         (member (caddr c) '(base lab bolla)))))
-
-
-
-
-;; ------------------------------------------------------------------
-;;  ------------------- EXECUTAR ACCIONS ------------------- 
+;;  ------------------- EXECUTAR ACCIONS ------------------- NOUR!!! 
 ;; ------------------------------------------------------------------
 
 
@@ -408,7 +543,7 @@
 
 
 ;; ------------------------------------------------------------------
-;;  ------------------- SETTERS: CREAR/MODIFICAR CASELLES -------------------
+;;  ------------------- SETTERS: CREAR/MODIFICAR CASELLES ------------------- no he mirado nada
 ;; ------------------------------------------------------------------
 
 ;; Crea una casella terra buida

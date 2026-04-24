@@ -64,7 +64,7 @@
     (nth x (nth y mapa))))
 
 ;; REVISA LÍMITS MAPA
-(defun posicio-valida (pos estat)
+(defun posicio-valida (pos estat) ;;; Y TAMBIEN EN VD SE PODRIA COMPROBAR QUE NO FUERA AGUA Y ASI SIMPLIFICAMOS
   "comprova que una posició estigui dins els límits del mapa."
   (let* ((mapa (get-mapa-dades estat))
          (x (car pos))
@@ -73,6 +73,7 @@
          (ample (length (car mapa))))
     (and (>= x 0) (< x ample)
          (>= y 0) (< y alt))))
+         
 
 
 (defun es-posicio-lliure (pos estat)
@@ -83,7 +84,7 @@
                  (es-bolla-casella c))))))
 
 
-(defun es-aigua (casella)
+(defun es-aigua-casella (casella)
   "retorna t si la casella és d'aigua."
   (and (listp casella) (eq (car casella) 'agua)))
 
@@ -171,6 +172,9 @@
             (list x y c)
             (trobar-base-fila (cdr fila) equip y (+ x 1))))))
 
+
+(defun get-coord-base (base)
+  (list (car base) (cadr base)))
 
 
 ;; ------------------------------------------------------------------
@@ -267,6 +271,9 @@
        (eq (caddr casella) 'bolla)
        (eq (cadddr casella) equip)))
 
+(defun no-es-del-meu-equip (casella equip) ;; este metodo maybe no nos hace falta pq cn el otro ya hacemos not y OK
+  (not (bolla-del-equip casella equip)))
+
 
 ; -----------------------------------------
 
@@ -300,9 +307,11 @@
       nil))
 
 ;; Retorna el temps de recuperació de moure
-(defun get-tr-moure (casella)
+(defun get-tr-moure (casella) ;; SIIIIIIIIIIIIIIIII LO USO
   "retorna el temps de recuperació de moure de la bolla."
   (if (es-bolla-casella-p casella)
       (cadddr (cddddr casella))
       nil))
 
+(defun get-coord-bolla (bolla) ;; SIIIIIIIIIIIIIIIII LO USO
+  (list (car bolla) (cadr bolla)))

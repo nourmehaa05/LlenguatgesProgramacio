@@ -1,6 +1,7 @@
-(load "agent-cms213.lsp")
-(load "agent-nms864.lsp")
-(load "grafics.lsp") ;; Entre aquests 2 nose quin anirá primer, revisar!
-(load "gestio-mapa.lsp") ;;
+;(load "agent-cms213.lsp")
+;(load "agent-nms864.lsp")
 (load "sleep.lsp")
+(load "mapes.lsp")
+(load "agent-prova.lsp")
+(load "grafics.lsp")
 (load "paintball.lsp")

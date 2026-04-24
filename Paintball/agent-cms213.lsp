@@ -97,3 +97,7 @@
      (if lab
          (list 'mou (list (first lab) (second lab)))
          (list 'mou '(0 0))))))
+
+(defun agent-cms213 (dades)
+  "Punt d'entrada de l'agent de l'equip e1."
+  (agent-xyz999 dades))

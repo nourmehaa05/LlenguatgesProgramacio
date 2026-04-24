@@ -1,0 +1,3 @@
+(defun agent-nms864 (dades)
+	"Punt d'entrada mínim de l'agent de l'equip e2."
+	nil)
