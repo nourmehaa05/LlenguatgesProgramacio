@@ -4,294 +4,276 @@
 ;; Professor: XXX.
 ;; Lliurament: primera convocatòria.
 ;; Fitxer del mòdul gràfic.
-;; <Descripció de les funcions d'aquest fitxer>
+;; Dibuixa el tablero del joc Paintball usant funcions de matrices.
 
 ;; ------------------------------------------------------------------
-;;  ------------------- DIBUIX PER TORN -------------------
+;;  ------------------- FUNCIONS AUXILIARS DE MATRIUS -------------------
 ;; ------------------------------------------------------------------
 
-(defun pinta (estat)
-  "Pinta l'estat complet de la partida una vegada per torn."
-  (let* ((mapa (cadr (assoc 'mapa estat)))
-         (dades (cadr (assoc 'dades mapa)))
-         (amplada (cadr (assoc 'amplada mapa)))
-         (alt (cadr (assoc 'alt mapa)))
-         (unitats (cadr (assoc 'unitats estat)))
-         (mida-casella (grafics-mida-casella amplada alt))
-         (origen-x (grafics-origen-x amplada mida-casella))
-         (origen-y (grafics-origen-y alt mida-casella)))
-    (cls)
-    (color 0 0 0 255 255 255)
-    (grafics-mostrar-resum estat)
-    (grafics-dibuixar-mapa dades unitats origen-x origen-y mida-casella)
-    (sleep 1)
-    estat))
+;; Trova l'índex de la columna dins d'una fila
+(defun troba-dins-fila (fila valor &optional (x 0))
+  "Retorna l'índex de la llista on un element conté el valor."
+  (cond ((null fila) nil)
+        ((member valor (car fila)) x)
+        (t (troba-dins-fila (cdr fila) valor (+ x 1)))))
 
-(defun grafics-mostrar-resum (estat)
-  (princ "Ronda: ")
-  (princ (cadr (assoc 'ronda estat)))
-  (princ " | Torn: ")
-  (princ (cadr (assoc 'torn estat)))
-  (princ " | Pintura e1: ")
-  (princ (cadr (assoc 'pintura-e1 estat)))
-  (princ " | Pintura e2: ")
-  (princ (cadr (assoc 'pintura-e2 estat)))
-  (terpri))
+;; Trova la posició (x y) d'un valor dins d'una matriu
+(defun troba-matriu (matriu valor &optional (y 0))
+  "Retorna una llista (x y) on es troba el valor a la matriu."
+  (cond ((null matriu) nil)
+        (t (let ((x (troba-dins-fila (car matriu) valor)))
+                (cond (x (list x y))
+                      (t (troba-matriu (cdr matriu) valor (+ y 1))))))))
 
-(defun grafics-mida-casella (amplada alt)
-  (let* ((ample-util 620)
-         (alt-util 320)
-         (mida-ample (round (/ ample-util amplada)))
-         (mida-alt (round (/ alt-util alt)))
-         (mida (min mida-ample mida-alt)))
-    (if (< mida 4) 4 mida)))
+;; Indexa una fila: retorna el valor que hi ha a la posició x
+(defun indexa-fila (fila x)
+  "Retorna l'element a la posició x d'una fila."
+  (cond ((null fila) nil)
+        ((= x 0) (car fila))
+        (t (indexa-fila (cdr fila) (- x 1)))))
 
-(defun grafics-origen-x (amplada mida-casella)
-  (round (/ (- 640 (* amplada mida-casella)) 2)))
+;; Indexa una matriu: retorna el valor que hi ha a la posició (x y)
+(defun indexa-matriu (matriu x y)
+  "Retorna l'element a la posició (x y) de la matriu."
+  (cond ((null matriu) nil)
+        ((= y 0) (indexa-fila (car matriu) x))
+        (t (indexa-matriu (cdr matriu) x (- y 1)))))
 
-(defun grafics-origen-y (alt mida-casella)
-  (+ 28 (round (/ (- 345 (* alt mida-casella)) 2))))
+;; Posa un valor dins d'una fila a la posició x
+(defun posa-dins-fila (fila x valor)
+  "Retorna una nova fila on a la posició x hi ha el valor."
+  (cond ((null fila) nil)
+        ((= x 0) (cons valor (cdr fila)))
+        (t (cons (car fila) (posa-dins-fila (cdr fila) (- x 1) valor)))))
 
-(defun grafics-dibuixar-mapa (dades unitats origen-x origen-y mida-casella)
-  (grafics-dibuixar-fila dades unitats origen-x origen-y mida-casella 0))
+;; Posa un valor dins d'una matriu a la posició (x y)
+(defun posa-matriu (matriu x y valor)
+  "Retorna una nova matriu on a la posició (x y) hi ha el valor."
+  (cond ((null matriu) nil)
+        ((= y 0) (cons (posa-dins-fila (car matriu) x valor) (cdr matriu)))
+        (t (cons (car matriu) (posa-matriu (cdr matriu) x (- y 1) valor)))))
 
-(defun grafics-dibuixar-fila (files unitats origen-x origen-y mida-casella y)
-  (cond
-    ((null files) nil)
-    (t
-     (progn
-       (grafics-dibuixar-fila-caselles (car files) unitats origen-x origen-y mida-casella y 0)
-       (grafics-dibuixar-fila (cdr files) unitats origen-x origen-y mida-casella (+ y 1))))))
+;; ------------------------------------------------------------------
+;;  ------------------- FUNCIONS DE DIBUIX -------------------
+;; ------------------------------------------------------------------
 
-(defun grafics-dibuixar-fila-caselles (fila unitats origen-x origen-y mida-casella y x)
-  (cond
-    ((null fila) nil)
-    (t
-     (let* ((coord (list x y))
-            (casella (car fila))
-            (unitat (grafics-obtenir-unitat-per-coord unitats coord))
-            (px (+ origen-x (* x mida-casella)))
-            (py (+ origen-y (* y mida-casella))))
-       (grafics-dibuixar-casella casella coord unitat px py mida-casella)
-       (grafics-dibuixar-fila-caselles (cdr fila) unitats origen-x origen-y mida-casella y (+ x 1))))))
+(defun aplica-color (clau)
+  "Aplica el color segons el símbol donat (RGB)."
+  (cond ((eq clau 'r)      (color 220 30 30 220 30 30))     ; Vermell
+        ((eq clau 'g)      (color 30 180 30 30 180 30))     ; Verd
+        ((eq clau 'b)      (color 30 80 220 30 80 220))     ; Blau
+        ((eq clau 'lila)   (color 200 100 250 200 100 250)) ; NOU: Lila
+        ((eq clau 'taronja)(color 255 165 0 255 165 0))     ; NOU: Taronja
+        ((eq clau 'aigua)  (color 0 20 60 0 20 60))         ; Blau fosc
+        (t                 (color 0 0 0 0 0 0))))           ; Negre
 
-(defun grafics-dibuixar-casella (casella coord unitat px py mida-casella)
-  (let* ((tipus (grafics-tipus-casella casella))
-         (color-casella (grafics-color-casella casella))
-         (element (or (and unitat (nth 2 unitat)) (grafics-element-casella casella)))
-         (equip (or (and unitat (nth 3 unitat)) (grafics-equip-casella casella)))
-         (colors-pintat (or (and unitat (nth 6 unitat)) (grafics-colors-pintat-casella casella)))
-         (color-propi (or (and unitat (nth 5 unitat)) (grafics-color-propi-casella casella)))
-         (tr-pintar (or (and unitat (nth 7 unitat)) (grafics-tr-pintar-casella casella)))
-         (tr-moure (or (and unitat (nth 8 unitat)) (grafics-tr-moure-casella casella))))
-    (cond
-      ((eq tipus 'aigua)
-       (grafics-pen 'b)
-       (move px py)
-       (grafics-quadrat mida-casella))
-      (t
-       (grafics-pen color-casella)
-       (move px py)
-       (grafics-quadrat mida-casella)
-       (cond
-         ((eq element 'base)
-          (grafics-dibuixar-base equip colors-pintat px py mida-casella))
-         ((eq element 'bolla)
-          (grafics-dibuixar-bolla color-propi colors-pintat px py mida-casella tr-pintar tr-moure))
-         ((eq element 'lab)
-          (grafics-dibuixar-lab equip px py mida-casella)))))))
-
-(defun grafics-dibuixar-base (equip colors-pintat px py mida-casella)
-  (let ((cini (+ 2 (round (/ mida-casella 4)))))
-    (grafics-pen (grafics-color-equip equip))
-    (move (+ px cini) (+ py cini))
-    (grafics-quadrat (- mida-casella (* 2 cini)))
-    (grafics-dibuixar-colors-pintat colors-pintat px py mida-casella)))
-
-(defun grafics-dibuixar-bolla (color-propi colors-pintat px py mida-casella tr-pintar tr-moure)
-  (let ((radi (max 2 (round (/ mida-casella 3)))))
-    (grafics-pen (grafics-color-simbol color-propi))
-    (grafics-cercle (+ px (round (/ mida-casella 2)))
-                    (+ py (round (/ mida-casella 2)))
-                    radi
-                    10)
-    (grafics-dibuixar-colors-pintat colors-pintat px py mida-casella)))
-
-(defun grafics-dibuixar-lab (equip px py mida-casella)
-  (let ((color-lab (grafics-color-equip equip)))
-    (grafics-pen color-lab)
-    (move (+ px 2) (+ py 2))
-    (drawrel (- mida-casella 4) (- mida-casella 4))
-    (move (+ px 2) (- (+ py mida-casella) 2))
-    (drawrel (- mida-casella 4) 4)))
-
-(defun grafics-dibuixar-colors-pintat (colors-pintat px py mida-casella)
-  (grafics-dibuixar-colors-pintat-rec colors-pintat px py mida-casella 0))
-
-(defun grafics-dibuixar-colors-pintat-rec (colors-pintat px py mida-casella idx)
-  (cond
-    ((null colors-pintat) nil)
-    (t
-     (let* ((color (car colors-pintat))
-            (offset (+ 2 (* idx 4))))
-       (grafics-pen (grafics-color-simbol color))
-       (move (+ px offset) (+ py 1))
-       (grafics-quadrat 2)
-       (grafics-dibuixar-colors-pintat-rec (cdr colors-pintat) px py mida-casella (+ idx 1))))))
-
-(defun grafics-quadrat (mida)
-  (drawrel 0 mida)
+(defun dibuixaquadrat (mida)
+  "Dibuixa un quadrat de mida `mida`, a la posició actual."
   (drawrel mida 0)
-  (drawrel 0 (- mida))
-  (drawrel (- mida) 0))
+  (drawrel 0 mida)
+  (drawrel (- mida) 0)
+  (drawrel 0 (- mida)))
 
-(defun grafics-cercle (x y radi segments)
-  (move (+ x radi) y)
-  (grafics-cercle-rec x y radi (/ 360 segments) 0))
+(defun quadrat (mida &optional (gruix g))
+  "Dibuixa un quadrat de mida `mida` - 1, i de gruix `gruix`, a la posició actual."
+  (cond ((plusp gruix) 
+         (dibuixaquadrat (- mida 1))
+         (moverel 1 1)
+         (quadrat (- mida 2) (- gruix 1))
+         (moverel -1 -1))))
 
-(defun grafics-cercle-rec (x y radi pas angle)
+(defun pinta-fila (fila i mida y)
+  "Pinta una fila de caselles de forma segura i completa."
   (cond
-    ((< angle 360)
-     (draw (+ x (* radi (cos (grafics-radians (+ angle pas)))))
-           (+ y (* radi (sin (grafics-radians (+ angle pas))))))
-     (grafics-cercle-rec x y radi pas (+ angle pas)))
-    (t t)))
+    ((null fila) t)
+    (t
+     (let* ((casella (car fila))
+            (x-pos (+ xi (* i mida)))
+            (y-pos (+ yi (* y mida)))
+            (color-casella (extraer-color-casella casella))
+            (tipo-elemento (caddr casella))
+            (equip-elemento (cadddr casella)))
+
+       ;; 1. POSICIONAMIENTO Y FONDO
+       (move x-pos y-pos)
+       (aplica-color color-casella)
+       (rellena-quadrat x-pos y-pos mida)
+
+       ;; 2. BORDE DE LA CASILLA
+       (move x-pos y-pos)
+       (color 0 0 0 0 0 0)
+       (quadrat mida)
+
+       ;; 3. DIBUJO DEL CONTENIDO
+       (cond
+         ;; --- BASE ---
+         ((member 'base casella)
+          (let ((margin 4))
+            ;; Si es equipo 1 usamos lila, si es equipo 2 usamos taronja
+            (aplica-color (if (eq equip-elemento 'e1) 'lila 'taronja))
+            (rellena-quadrat (+ x-pos margin) (+ y-pos margin) (- mida (* 2 margin)))))
+
+         ;; --- LABORATORI (Cruz) ---
+         ((member 'lab casella)
+          (let ((cx (+ x-pos (/ mida 2)))
+                (cy (+ y-pos (/ mida 2)))
+                (r (/ mida 3)))
+            (aplica-color (cond ((eq equip-elemento 'e1) 'r)
+                                ((eq equip-elemento 'e2) 'g)
+                                (t 'b)))
+            (move (truncate (- cx r)) (truncate cy))
+            (drawrel (truncate (* 2 r)) 0)
+            (move (truncate cx) (truncate (- cy r)))
+            (drawrel 0 (truncate (* 2 r)))))
+
+        ;; --- BOLLA (Círculo Sólido y Limpio) ---
+         ((member 'bolla casella)
+          (let ((cx (truncate (+ x-pos (/ mida 2))))
+                (cy (truncate (+ y-pos (/ mida 2)))))
+
+            (aplica-color (nth 6 casella))
+
+            ;; Dibujamos un círculo de 5x5 píxeles mediante 3 franjas
+            ;; Franja superior e inferior (3 píxeles de ancho)
+            (move (- cx 1) (- cy 2)) (draw (+ cx 1) (- cy 2))
+            (move (- cx 1) (+ cy 2)) (draw (+ cx 1) (+ cy 2))
+
+            ;; Cuerpo central (5 píxeles de ancho, 3 de alto)
+            (move (- cx 2) (- cy 1)) (draw (+ cx 2) (- cy 1))
+            (move (- cx 2) cy)       (draw (+ cx 2) cy)
+            (move (- cx 2) (+ cy 1)) (draw (+ cx 2) (+ cy 1))))
+       )
+
+       ;; 4. RESET Y SIGUIENTE CASILLA
+       (color 0 0 0 0 0 0)
+       (pinta-fila (cdr fila) (+ i 1) mida y)))))
+        
+(defun extraer-color-casella (casella)
+  "Extrae el color de fondo d'una casella."
+  (let ((tipo (car casella)))
+    (cond
+      ((eq tipo 'aigua) 'aigua)
+      ((eq tipo 'terra)
+       (let ((color-info (cadr casella)))
+         (cond
+           ((eq color-info 'r) 'r)      ; terra pintada vermell
+           ((eq color-info 'g) 'g)      ; terra pintada verd
+           ((eq color-info 'b) 'b)      ; terra pintada blau
+           (t 'terra))))                ; terra sense pintura (gris)
+      (t 'terra))))
+
+(defun grafics-cercle-petit (radi segments)
+  "Dibuixa un cercle pequeño (aproximat)."
+  (move 0 (- radi))
+  (grafics-cercle-petit-rec radi (/ 360 segments) 0))
+
+(defun grafics-cercle-petit-rec (radi pas angle)
+  "Recorre els punts d'un cercle per dibuixar-lo."
+  (cond
+    ((>= angle 360) t)
+    (t 
+     (let ((x (truncate (* radi (cos (grafics-radians angle)))))
+           (y (truncate (* radi (sin (grafics-radians angle))))))
+       (draw x y)
+       (grafics-cercle-petit-rec radi pas (+ angle pas))))))
 
 (defun grafics-radians (graus)
+  "Converteix graus a radians."
   (/ (* graus (* 2 pi)) 360))
 
-(defun grafics-pen (simbol-color)
-  (let ((rgb (grafics-color->rgb simbol-color)))
-    (color (car rgb) (cadr rgb) (caddr rgb) 255 255 255)))
+(defun pinta-matriu (matriu mida)
+  "Pinta la matriu sencera de caselles."
+  (pinta-matriu-rec matriu mida 0))
 
-(defun grafics-color->rgb (simbol)
+(defun pinta-matriu-rec (matriu mida y)
+  "Recorre les files de la matriu recursivament."
   (cond
-    ((eq simbol 'r) '(255 0 0))
-    ((eq simbol 'g) '(0 180 0))
-    ((eq simbol 'b) '(0 80 255))
-    ((eq simbol 'e1) '(255 0 0))
-    ((eq simbol 'e2) '(0 180 0))
-    ((eq simbol 'lab) '(0 0 0))
-    ((eq simbol 'terra) '(190 190 190))
-    ((eq simbol 'aigua) '(40 100 255))
-    (t '(0 0 0))))
+    ((null matriu) (color 0 0 0 255 255 255))
+    (t 
+     (move xi (+ yi (* y mida)))
+     (pinta-fila (car matriu) 0 mida y)
+     (pinta-matriu-rec (cdr matriu) mida (+ y 1)))))
 
-(defun grafics-color-equip (equip)
+(defun pinta (estat)
+  (let* ((mapa (cadr (assoc 'mapa estat)))
+         (ronda (cadr (assoc 'ronda estat)))
+         (torn (cadr (assoc 'torn estat)))
+         (p1 (cadr (assoc 'pintura-e1 estat)))
+         (p2 (cadr (assoc 'pintura-e2 estat))))
+    (cls)
+    (ajusta-mida-mapa mapa)   
+    (color 0 0 0 255 255 255)
+    (princ "Ronda: ")
+    (princ ronda)
+    (princ " | Torn: ")
+    (princ torn)
+    (princ " | Pintura e1: ")
+    (princ p1)
+    (princ " | Pintura e2: ")
+    (princ p2)
+    (terpri)
+    (pinta-matriu mapa m)
+    (sleep 0.1)
+    estat))
+
+(defun pinta-marques (colors mida)
   (cond
-    ((eq equip 'e1) 'r)
-    ((eq equip 'e2) 'g)
-    (t 'lab)))
+    ((null colors) t)
 
-(defun grafics-color-simbol (simbol)
+    ((eq (car colors) 'r)
+     (aplica-color 'r)
+     (drawrel (- mida 6) 0)
+     (move (- (current-x) (- mida 6)) (current-y))
+     (pinta-marques (cdr colors) mida))
+
+    ((eq (car colors) 'g)
+     (aplica-color 'g)
+     (drawrel 0 (- mida 6))
+     (move (current-x) (+ (current-y) (- mida 6)))
+     (pinta-marques (cdr colors) mida))
+
+    ((eq (car colors) 'b)
+     (aplica-color 'b)
+     (drawrel (- mida 6) (- mida 6))
+     (move (- (current-x) (- mida 6))
+           (- (current-y) (- mida 6)))
+     (pinta-marques (cdr colors) mida))
+
+    (t (pinta-marques (cdr colors) mida))))
+
+;; Rellena un quadrat sencer de mida x mida
+(defun rellena-quadrat (x0 y0 mida)
+  "Omple un quadrat píxel a píxel amb línies horitzontals."
+  (rellena-quadrat-rec x0 y0 mida 0))
+
+(defun rellena-quadrat-rec (x0 y0 mida i)
   (cond
-    ((eq simbol 'r) 'r)
-    ((eq simbol 'g) 'g)
-    ((eq simbol 'b) 'b)
-    ((eq simbol 'e1) 'r)
-    ((eq simbol 'e2) 'g)
-    (t 'lab)))
-
-(defun grafics-tipus-casella (casella)
-  (cond
-    ((null casella) 'terra)
-    ((atom casella) casella)
-    (t (car casella))))
-
-(defun grafics-color-casella (casella)
-  (cond
-    ((null casella) 'terra)
-    ((atom casella) 'terra)
-    ((and (consp casella) (consp (cdr casella))) (cadr casella))
-    (t 'terra)))
-
-(defun grafics-element-casella (casella)
-  (cond
-    ((and (consp casella) (member 'bolla casella)) 'bolla)
-    ((and (consp casella) (member 'base casella)) 'base)
-    ((and (consp casella) (member 'lab casella)) 'lab)
-    (t nil)))
-
-(defun grafics-equip-casella (casella)
-  (cond
-    ((and (consp casella) (member 'bolla casella)) (cadr (member 'bolla casella)))
-    ((and (consp casella) (member 'base casella)) (cadr (member 'base casella)))
-    ((and (consp casella) (member 'lab casella)) (cadr (member 'lab casella)))
-    (t nil)))
-
-(defun grafics-colors-pintat-casella (casella)
-  (cond
-    ((and (consp casella) (member 'bolla casella)) (cadddr (member 'bolla casella)))
-    ((and (consp casella) (member 'base casella)) (caddr (member 'base casella)))
-    (t nil)))
-
-(defun grafics-color-propi-casella (casella)
-  (cond
-    ((and (consp casella) (member 'bolla casella)) (caddr (member 'bolla casella)))
-    (t nil)))
-
-(defun grafics-tr-pintar-casella (casella)
-  (cond
-    ((and (consp casella) (member 'bolla casella)) (cadddr (cddddr (member 'bolla casella))))
-    (t nil)))
-
-(defun grafics-tr-moure-casella (casella)
-  (cond
-    ((and (consp casella) (member 'bolla casella)) (cadr (cddddr (member 'bolla casella))))
-    (t nil)))
-
-(defun grafics-obtenir-unitat-per-coord (unitats coord)
-  (cond
-    ((null unitats) nil)
-    ((equal (nth 4 (car unitats)) coord) (car unitats))
-    (t (grafics-obtenir-unitat-per-coord (cdr unitats) coord))))
-;; ------------------------------------------------------------------
-;;  ------------------- MODIFICACIÓ FUNCIONAL DEL MAPA -------------------
-;; ------------------------------------------------------------------
-;; Aquest bloc és el contracte canònic per pintar el mapa sense mutar-lo.
-;; No cal introduir-hi variants alternatives per a la mateixa tasca.
-
-(defun pintar-casella (coord color estat)
-  "Pinta la casella de la coordenada indicada del color donat.
-   Actualitza el color de la casella al mapa."
-  (let* ((mapa      (cadr (assoc 'mapa estat)))
-         (dades     (cadr (assoc 'dades mapa)))
-         (amplada   (cadr (assoc 'amplada mapa)))
-         (alt       (cadr (assoc 'alt mapa)))
-         ;; reconstruïm el mapa amb la casella pintada
-         (dades-noves (pintar-casella-dades coord color dades))
-         (mapa-nou  (list (list 'dades    dades-noves)
-                          (list 'amplada  amplada)
-                          (list 'alt      alt))))
-    ;; reconstruïm l'estat amb el nou mapa
-    (substituir-camp 'mapa mapa-nou estat)))
-
-(defun pintar-casella-dades (coord color dades)
-  "Reconstrueix la matriu del mapa pintant la casella (x,y) del color indicat.
-   Cada cel·la del mapa és una llista: (tipus-casella color-casella)"
-  (let ((x (car coord))
-        (y (cadr coord)))
-    (pintar-fila-rec dades x y color 0)))
-
-(defun pintar-fila-rec (files x y color fila-actual)
-  "Recorre les files del mapa recursivament fins trobar la fila y."
-  (cond
-    ((null files) nil)
-    ((= fila-actual y)
-     (cons (pintar-columna-rec (car files) x color 0)
-           (pintar-fila-rec (cdr files) x y color (+ fila-actual 1))))
+    ((>= i mida) t)
     (t
-     (cons (car files)
-           (pintar-fila-rec (cdr files) x y color (+ fila-actual 1))))))
+      (move x0 (+ y0 i))
+      (drawrel mida 0)
+      (rellena-quadrat-rec x0 y0 mida (+ i 1)))))
 
-(defun pintar-columna-rec (fila x color col-actual)
-  "Recorre les columnes d'una fila recursivament fins trobar la columna x."
-  (cond
-    ((null fila) nil)
-    ((= col-actual x)
-     ;; La cel·la és (tipus-casella color-casella); actualitzem el color
-     (cons (list (car (car fila))   ;; mantenim el tipus ('terra o 'aigua)
-                 color)             ;; actualitzem el color
-           (pintar-columna-rec (cdr fila) x color (+ col-actual 1))))
-    (t
-     (cons (car fila)
-           (pintar-columna-rec (cdr fila) x color (+ col-actual 1))))))
+(defun ajusta-mida-mapa (mapa)
+  "Ajusta les globals de dibuix segons la mida del mapa."
+  (let* ((files (length mapa))
+         (cols (length (car mapa))))
+    (cond
+      ;; Mapa 20x20
+      ((and (= files 20) (= cols 20))
+       (setq xi 100)
+       (setq yi 40)
+       (setq m 15)
+       (setq g 1))
+      ;; Mapa 60x60
+      ((and (= files 50) (= cols 50))
+      (setq xi 100)
+      (setq yi 40)
+      (setq m 6)
+      (setq g 1))
+      ;; Per defecte
+      (t
+       (setq xi 10)
+       (setq yi 40)
+       (setq m 10)
+       (setq g 1)))))

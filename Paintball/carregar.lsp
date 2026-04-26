@@ -1,7 +1,6 @@
 ;(load "agent-cms213.lsp")
 ;(load "agent-nms864.lsp")
 (load "sleep.lsp")
-(load "mapes.lsp")
 (load "agent-prova.lsp")
 (load "grafics.lsp")
 (load "paintball.lsp")

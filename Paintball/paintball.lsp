@@ -65,13 +65,26 @@
 ; ------------------------------------------------------------------
 ;;  ------------------- INICIAR PARTIDA -------------------
 ;; ------------------------------------------------------------------
-;; Cream l'estat inicial i carregam el mapa.
-(defun iniciar-partida (mapa)
-  "Crea estat inicial complet i comença la partida."
-  (let* (
-         (estat (crear-estat-inicial mapa))
-        )
-  (jugar-partida-inicial estat)))
+(defun carrega-mapa (nom)
+  "Carrega un fitxer .map de la carpeta maps/ pel seu nom."
+  (let* ((ruta (concatenate 'string "maps/" nom ".map"))
+         (fitxer (open ruta :direction :input)))
+    (cond
+      ((null fitxer)
+       (princ "Error: no s'ha trobat el mapa ")
+       (princ ruta)
+       (terpri)
+       nil)
+      (t
+       (let ((mapa (read fitxer)))
+         (close fitxer)
+         mapa)))))
+
+(defun iniciar-partida (nom-mapa)
+  "Carrega el mapa pel nom i comença la partida."
+  (let* ((mapa (carrega-mapa nom-mapa))
+         (estat (crear-estat-inicial mapa)))
+    (jugar-partida-inicial estat)))
 
 
 ; ------------------------------------------------------------------
