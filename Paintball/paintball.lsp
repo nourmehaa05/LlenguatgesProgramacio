@@ -58,7 +58,7 @@
 ; *Anar endavant o enrere amb les accions
 ; límit 1500 torns (HA DE DURAR <2 MINUTS)
 ; mapes 60x60
-; memoria-compartida
+; memoria-compartida ????
 ; bolla pinta també la casella
 
 
@@ -83,8 +83,8 @@
 (defun iniciar-partida (nom-mapa)
   "Carrega el mapa pel nom i comença la partida."
   (let* ((mapa (carrega-mapa nom-mapa))
-         (estat (crear-estat-inicial mapa)))
-    (jugar-partida-inicial estat)))
+         (estat (if mapa (crear-estat-inicial mapa) nil)))
+    (if estat (jugar-partida-inicial estat) nil)))
 
 
 ; ------------------------------------------------------------------
@@ -98,19 +98,16 @@
   (cond
     ((eq mapa-nom 'tiny) tiny-map) ; LUEGO AÑADIR MAS MAPAS.
     ((eq mapa-nom 'big) big-map)
-    (t (error "Mapa desconegut"))))
-
+    (t nil)))
 
 (defun extraer-unitats (mapa x y next-id)
   (cond
     ((null mapa) (list nil next-id))
-
     (t
      (let* (
             (res-fila (extraer-unitats-fila (car mapa) x y next-id))
             (unitats-fila (car res-fila))
             (next-id2 (cadr res-fila))
-
             (res-resto (extraer-unitats (cdr mapa) 0 (+ y 1) next-id2))
             (unitats-resto (car res-resto))
             (next-id3 (cadr res-resto))
@@ -122,7 +119,6 @@
 (defun extraer-unitats-fila (fila x y next-id)
   (cond
     ((null fila) (list nil next-id))
-
     (t
      (let* (
             (celda (car fila))
@@ -130,10 +126,8 @@
             (unitats-resto (car res-resto))
             (next-id2 (cadr res-resto))
            )
-
        (if (and (eq (car celda) 'terra)
                 (member 'base celda))
-
            ;; CREAR BASE
            (let ((equip (cadr (member 'base celda))))
              (list
@@ -141,7 +135,6 @@
                (crear-base next-id2 equip (list x y))
                unitats-resto)
               (+ next-id2 1)))
-
          ;; NO HAY BASE
          (list unitats-resto next-id2))))))
 
@@ -209,28 +202,25 @@
 
 ;; Aquest mètode es fa per no incrementar la pintura ni decrementar
 ;; els temps a la primera ronda.
-(defun jugar-partida-inicial(estat) ;; ESTE MÉTODO HAY QUE REVISARLO
+(defun jugar-partida-inicial (estat)
   "Primera ronda de la partida."
+  (let ((mapa (cadr (assoc 'mapa estat))))
+    (ajusta-mida-mapa mapa)
+    (color 0 0 0 255 255 255)
+    (cls)                        ; cls UNA sola vegada al principi
+    (pinta-matriu mapa m))       ; dibuix inicial complet
   (cond
     ((final-partida-p estat)
      (finalitzar-partida estat))
-
     (t
-     (let* (
-            ;; torn equip inicial (e1)
-            (estat1 (executar-torn estat))
-            (estat2 (seguent-torn estat1))
-           )
+     (let* ((estat1 (executar-torn estat))
+            (estat2 (seguent-torn estat1)))
        (pinta estat1)
-       (if (final-partida-p estat2) ; Revisió en cas de que base e1 davora base e2 i PUM BOLLA MATA.
+       (if (final-partida-p estat2)
            (finalitzar-partida estat2)
-         (let* (
-                ;; torn segon equip (e2)
-                (estat3 (executar-torn estat2))
-                (estat4 (seguent-torn estat3))
-               )
-         (pinta estat4)
-           ;; a partir d'aquí ja entram al bucle normal amb upkeep
+         (let* ((estat3 (executar-torn estat2))
+                (estat4 (seguent-torn estat3)))
+           (pinta estat4)
            (jugar-partida estat4)))))))
 
 
@@ -247,6 +237,7 @@
             (estat3 (executar-torn estat2))
             (estat4 (seguent-torn estat3))
            )
+      (sleep 0.05) ;; Pausa para controlar la velocidad del juego
       (pinta estat4)
        (jugar-partida estat4)))))
 
@@ -270,10 +261,10 @@
 
 (defun base-pintada-3-colors-p (estat)
   (let* ((unitats (cadr (assoc 'unitats estat)))
-         (unitats-e1 (obtenir-unitats-per-equip unitats 'e1))
-         (unitats-e2 (obtenir-unitats-per-equip unitats 'e2)))
-    (or (unitat-explotada-en-llista-p unitats-e1 'base) ;; NOSE SI LUEGO CAMBIAR LOS MÉTODOS
-        (unitat-explotada-en-llista-p unitats-e2 'base))))
+         (base-e1 (obtenir-base-per-equip unitats 'e1))
+         (base-e2 (obtenir-base-per-equip unitats 'e2)))
+    (or (null base-e1)
+        (null base-e2))))
 
 (defun obtenir-base-per-equip (unitats equip)
   (cond
@@ -297,23 +288,43 @@
          (unitats (cadr (assoc 'unitats estat)))
          (e1 (obtenir-unitats-per-equip unitats 'e1))
          (e2 (obtenir-unitats-per-equip unitats 'e2))
-         (base-e1-explotada (unitat-explotada-en-llista-p e1 'base))
-         (base-e2-explotada (unitat-explotada-en-llista-p e2 'base))
+         (base-e1 (obtenir-base-per-equip e1 'e1))
+         (base-e2 (obtenir-base-per-equip e2 'e2))
+         (base-e1-explotada (null base-e1))
+         (base-e2-explotada (null base-e2))
 
          (bolles-e1 (contar-bolles-vives e1))
          (bolles-e2 (contar-bolles-vives e2))
 
          (p1 (cadr (assoc 'pintura-e1 estat)))
          (p2 (cadr (assoc 'pintura-e2 estat)))
+         (resultat
+          (cond
+            ((and base-e1-explotada (not base-e2-explotada)) 'guanya-e2)
+            ((and base-e2-explotada (not base-e1-explotada)) 'guanya-e1)
+            ((> bolles-e1 bolles-e2) 'guanya-e1)
+            ((> bolles-e2 bolles-e1) 'guanya-e2)
+            ((> p1 p2) 'guanya-e1)
+            ((> p2 p1) 'guanya-e2)
+            (t (random-empate))))
         )
+    ;; Dibujamos el último estado para que el mapa se vea congelado
+    (pinta estat)
+    ;; Configuración para el texto final (letras blancas con contorno o fondo si es necesario, aquí negro sobre fondo invisible)
+    (color 0 0 0 255 255 255)
+    (goto-xy 10 340)
+    (princ "================================")
+    (terpri)
+    (goto-xy 10 355)
     (cond
-      ((and base-e1-explotada (not base-e2-explotada)) 'guanya-e2)
-      ((and base-e2-explotada (not base-e1-explotada)) 'guanya-e1)
-      ((> bolles-e1 bolles-e2) 'guanya-e1)
-      ((> bolles-e2 bolles-e1) 'guanya-e2)
-      ((> p1 p2) 'guanya-e1)
-      ((> p2 p1) 'guanya-e2)
-      (t (random-empate)))))
+      ((eq resultat 'guanya-e1)
+       (princ "GUANYA EQUIP E1 (LILA)"))
+      ((eq resultat 'guanya-e2)
+       (princ "GUANYA EQUIP E2 (TARONJA)")))
+    (terpri)
+    (goto-xy 10 370)
+    (princ "================================")
+    resultat))
 
 (defun random-empate ()
   (if (= (random 2) 0)
@@ -525,9 +536,9 @@
   (let ((equip (cadr info-unitat)))
     (cond
       ((eq equip 'e1)
-       (agent-prova info-unitat))
+       (agent-cms213 info-unitat))
       ((eq equip 'e2)
-       (agent-prova info-unitat))
+       (agent-nms864 info-unitat))
       (t nil))))
 
 
@@ -557,7 +568,11 @@
 (defun coord-valida-p (coord)
   (and (listp coord)
   (not (null coord))
-  (not (null (cdr coord)))))
+  (not (null (cdr coord)))
+  (integerp (car coord))
+  (integerp (cadr coord))
+  (>= (car coord) 0)
+  (>= (cadr coord) 0)))
 
 (defun accio-formada-p (accio)
   (and (listp accio)
@@ -705,7 +720,7 @@
   (and (eq (nth 2 unitat) 'bolla)
        (temps-unitat-disponible-p unitat 'pintar)
   (coord-valida-p coord)
-  (coordenada-accio-dins-rang-bolla-p unitat coord)
+  (coordenada-accio-dins-rang-pinta-p unitat coord)
   (coordenada-accio-dins-mapa-p estat coord)
   (coordenada-accio-no-aigua-p estat coord)
   (coordenada-accio-pintable-p estat unitat equip coord)))
@@ -715,7 +730,7 @@
   (and (eq (nth 2 unitat) 'bolla)
        (temps-unitat-disponible-p unitat 'moure)
     (coord-valida-p coord)
-    (coordenada-accio-dins-rang-bolla-p unitat coord)
+    (coordenada-accio-dins-rang-mou-p unitat coord)
     (coordenada-accio-dins-mapa-p estat coord)
     (coordenada-accio-no-aigua-p estat coord)
     (coordenada-accio-lliure-p estat coord)))
@@ -856,26 +871,27 @@
            (eliminar-unitat-per-coord (cdr unitats) coord)))))
 
 (defun recuperacio-pinta (unitat estat)
+  "Recuperación de pintar: base=3, penalización origen (casella ≠ color bolla) ×3. Retorna ENTERO."
   (let* ((mapa (cadr (assoc 'mapa estat)))
          (casella-origen (obtenir-casella-mapa mapa (nth 4 unitat)))
          (color-origen (obtenir-color-terra-casella casella-origen))
-         (color-bolla (nth 5 unitat)))
-    (if (eq color-origen color-bolla)
-        3
-      9)))
+         (color-bolla (nth 5 unitat))
+         (base 3)
+         (penalizacion-origen (if (eq color-origen color-bolla) 1 3)))
+    (* base penalizacion-origen)))
 
 (defun recuperacio-mou (unitat estat coord)
+  "Recuperación de movimiento: base=1, diagonal≈1.4, penalización destino=1 o 3. Retorna ENTERO."
   (let* ((mapa (cadr (assoc 'mapa estat)))
-         (casella-origen (obtenir-casella-mapa mapa (nth 4 unitat)))
          (casella-desti (obtenir-casella-mapa mapa coord))
-         (color-origen (obtenir-color-terra-casella casella-origen))
          (color-desti (obtenir-color-terra-casella casella-desti))
          (color-bolla (nth 5 unitat))
-         (base 1.0)
-         (diag (if (= (dist2 (nth 4 unitat) coord) 2) 1.4142 1.0))
-         (penal-origen (if (eq color-origen color-bolla) 1.0 3.0))
-         (penal-desti (if (eq color-desti color-bolla) 1.0 3.0)))
-    (* base diag penal-origen penal-desti)))
+         (d2 (dist2 (nth 4 unitat) coord))
+         (base 1)
+         (diagonal (if (= d2 2) 1.4142 1.0))
+         (penalizacion-destino (if (eq color-desti color-bolla) 1 3))
+         (resultado (* base diagonal penalizacion-destino)))
+    (truncate resultado)))
 
 (defun casella-ocupada-per-element-p (casella)
   "Retorna T si la casella conté algun element de mapa (lab/base/bolla)."
@@ -892,16 +908,34 @@
     (and (> d2 0)
          (<= d2 2))))
 
-(defun coordenada-accio-dins-rang-bolla-p (unitat coord)
+;; SEPARACIÓN: Pintura usa d² ≤ 5, Movimiento usa d² ≤ 2
+(defun coordenada-accio-dins-rang-pinta-p (unitat coord)
+  "Validar que la coordenada está dentro del rango de pintura (d² ≤ 5)."
   (let* ((coord-bolla (nth 4 unitat))
          (d2 (dist2 coord-bolla coord)))
     (and (<= d2 5)
          (> d2 0))))
 
+(defun coordenada-accio-dins-rang-mou-p (unitat coord)
+  "Validar que la coordenada está dentro del rango de movimiento (d² ≤ 2)."
+  (let* ((coord-bolla (nth 4 unitat))
+         (d2 (dist2 coord-bolla coord)))
+    (and (<= d2 2)
+         (> d2 0))))
+
+;; DEPRECATED: mantener para compatibilidad pero usar las nuevas versiones
+(defun coordenada-accio-dins-rang-bolla-p (unitat coord)
+  (coordenada-accio-dins-rang-mou-p unitat coord))
+
 (defun coordenada-accio-dins-mapa-p (estat coord)
+  "Verifica que la coordenada existe en el mapa y está dentro de los límites."
   (let* ((mapa (cadr (assoc 'mapa estat)))
-         (casella (obtenir-casella-mapa mapa coord)))
-    (not (null casella))))
+         (mapa-altura (length mapa))
+         (mapa-anchura (if (> mapa-altura 0) (length (car mapa)) 0)))
+    (and (coord-valida-p coord)
+         (< (car coord) mapa-anchura)
+         (< (cadr coord) mapa-altura)
+         (not (null (obtenir-casella-mapa mapa coord))))))
 
 (defun coordenada-accio-no-aigua-p (estat coord)
   (let* ((mapa (cadr (assoc 'mapa estat)))
@@ -1062,9 +1096,9 @@
                 coord
                 color
                 (list color)
-                0          ; tr-pintar
-                0          ; tr-moure
-                nil))      ; tr-crear (no usado para bollas)
+                0
+                0
+                nil))
          (unitats1
           (if base-actualitzada
               (actualitzar-unitat-per-coord unitats
@@ -1074,7 +1108,7 @@
          (unitats2 (cons nova-bolla unitats1))
          (mapa (cadr (assoc 'mapa estat)))
          (casella-bolla
-          (list 'terra color 'bolla next-id equip (list color) 0 0))
+          (list 'terra color 'bolla color next-id equip (list color) 0 0))
          (mapa1 (actualitzar-casella-mapa mapa coord casella-bolla))
          (estat1 (substituir-camp 'unitats unitats2 estat))
          (estat2 (substituir-camp 'mapa mapa1 estat1))
@@ -1082,6 +1116,7 @@
          (estat4 (if (eq equip 'e1)
                      (substituir-camp 'pintura-e1 (- pintura-equip 50) estat3)
                    (substituir-camp 'pintura-e2 (- pintura-equip 50) estat3))))
+    ;; Evitar redibujado en aplicar-crea-bolla - la función pinta() lo hará en la siguiente iteración
     estat4))
 
 (defun aplicar-pinta (estat unitat equip coord)
@@ -1090,8 +1125,12 @@
          (unitats (cadr (assoc 'unitats estat)))
          (casella-desti (obtenir-casella-mapa mapa coord))
          (color-bolla (nth 5 unitat))
-         (casella-pintada (canviar-color-casella casella-desti color-bolla))
          (tr-extra (recuperacio-pinta unitat estat))
+         ;; Solo cambiamos el color de la casilla si es diferente al color del ataque
+         (color-actual-terra (obtenir-color-terra-casella casella-desti))
+         (casella-pintada (if (eq color-actual-terra color-bolla)
+                              casella-desti
+                            (canviar-color-casella casella-desti color-bolla)))
          (unitat-origen (obtenir-unitat-per-id unitats (nth 1 unitat)))
          (unitat-origen-actual
           (if unitat-origen
@@ -1141,24 +1180,54 @@
             ((null unitat-desti) unitats1)
             ((eq (nth 3 unitat-desti) equip) unitats1)
             ((eq (nth 2 unitat-desti) 'base)
-             (actualitzar-unitat-per-coord unitats1 coord unitat-desti-actual))
+             ;; Si la base tiene 3 colores, eliminarla; si no, actualizarla
+             (if (and (listp colors-desti) (= (length colors-desti) 3))
+                 (eliminar-unitat-per-coord unitats1 coord)
+               (actualitzar-unitat-per-coord unitats1 coord unitat-desti-actual)))
             ((eq (nth 2 unitat-desti) 'bolla)
              (if unitat-desti-actual
                  (actualitzar-unitat-per-coord unitats1 coord unitat-desti-actual)
                (eliminar-unitat-per-coord unitats1 coord)))
             (t unitats1)))
          (nova-casella
-          (if (member 'lab casella-desti)
-              (canviar-lab-equip-casella casella-pintada equip)
-            casella-pintada))
+          (cond
+            ((member 'lab casella-desti)
+             (canviar-lab-equip-casella casella-pintada equip))
+            ((member 'bolla casella-desti)
+             ;; Si la bolla explota (3 colores), queda solo la tierra pintada
+             (if (and (listp colors-desti) (= (length colors-desti) 3))
+                 (list 'terra color-bolla)
+               ;; Si no explota, actualizar casella de bolla con los nuevos colors-pintat
+               (let ((bolla (member 'bolla casella-desti)))
+                 (list 'terra color-bolla 'bolla
+                       (cadr bolla)                    ; color-propi
+                       (caddr bolla)                   ; id
+                       (cadddr bolla)                  ; equip
+                       colors-desti                    ; colors-pintat ACTUALIZADO
+                       (cadr (cddddr bolla))           ; tr-pintar
+                       (caddr (cddddr bolla))))))
+            ((member 'base casella-desti)
+             ;; Si la base explota (3 colores), eliminarla del mapa Y ASEGURAR QUE SE VEA LA TIERRA
+             (if (and (listp colors-desti) (= (length colors-desti) 3))
+                 (list 'terra color-bolla)
+               ;; Si no explota, actualizar con los nuevos colores y cambiar color de casella
+               (let ((base (member 'base casella-desti)))
+                 ;; CAMBIO: Mantener color de la base pero actualizar sus colores internos
+                 (list 'terra color-bolla 'base
+                       (cadr base)                   ; equip
+                       colors-desti))))              ; colors-pintat ACTUALIZADO
+            (t casella-pintada)))
          (mapa1 (actualitzar-casella-mapa mapa coord nova-casella))
-         (estat1 (substituir-camp 'mapa mapa1 estat)))
-    (substituir-camp 'unitats unitats2 estat1)))
+         (estat1 (substituir-camp 'mapa mapa1 estat))
+         (estat-final (substituir-camp 'unitats unitats2 estat1)))
+    ;; Evitar redibujado en aplicar-pinta - la función pinta() lo hará en la siguiente iteración
+    estat-final))
 
 (defun aplicar-mou (estat unitat equip coord)
   "Mou la bolla a la coordenada destí i incrementa el seu cooldown de moviment."
   (let* ((unitats (cadr (assoc 'unitats estat)))
          (unitat-actual (obtenir-unitat-per-id unitats (nth 1 unitat)))
+         (coord-origen (nth 4 unitat-actual))
          (tr-extra (recuperacio-mou unitat estat coord))
          (unitat-moguda
           (if unitat-actual
@@ -1169,7 +1238,7 @@
             nil))
          (unitats1
           (if unitat-moguda
-              (actualitzar-unitat-per-coord unitats (nth 4 unitat-actual) 
+              (actualitzar-unitat-per-coord unitats coord-origen
                                             (list 'unitat
                                                   (nth 1 unitat-moguda)
                                                   (nth 2 unitat-moguda)
@@ -1181,8 +1250,28 @@
                                                   (nth 8 unitat-moguda)
                                                   (nth 9 unitat-moguda)))
             unitats))
-         (estat1 (substituir-camp 'unitats unitats1 estat)))
-    estat1))
+         (mapa (cadr (assoc 'mapa estat)))
+         (casella-origen (obtenir-casella-mapa mapa coord-origen))
+         (color-terra-origen (obtenir-color-terra-casella casella-origen))
+         (casella-origen-buida
+          (list 'terra color-terra-origen))
+         (casella-desti-orig (obtenir-casella-mapa mapa coord))
+         (color-terra-desti (obtenir-color-terra-casella casella-desti-orig))
+         (color-bolla (nth 5 unitat))
+         (casella-desti
+          (list 'terra color-terra-desti 'bolla
+                color-bolla
+                (nth 1 unitat)
+                equip
+                (nth 6 unitat)
+                (nth 7 unitat-moguda)
+                (nth 8 unitat-moguda)))
+         (mapa1 (actualitzar-casella-mapa mapa coord-origen casella-origen-buida))
+         (mapa2 (actualitzar-casella-mapa mapa1 coord casella-desti))
+         (estat1 (substituir-camp 'unitats unitats1 estat))
+         (estat-final (substituir-camp 'mapa mapa2 estat1)))
+    ;; Evitar redibujado en aplicar-mou - la función pinta() lo hará en la siguiente iteración
+    estat-final))
 
 (defun aplicar-escriu-memoria (estat unitat equip nova-memoria)
   "Placeholder d'aplicacio d'escriu-memoria."
@@ -1218,45 +1307,167 @@
          (construir-visio-fila (cdr fila) unitats coord-origen rango y (+ x 1)))))))
 
 (defun construir-entrada-visio (coord casella unitat-casella)
-  (let* ((tipus-casella (car casella))
-         (color-casella (obtenir-color-terra-casella casella))
-         (tipus-element (cond
-                          ((and unitat-casella (eq (nth 2 unitat-casella) 'base)) 'base)
-                          ((and unitat-casella (eq (nth 2 unitat-casella) 'bolla)) 'bolla)
-                          ((member 'lab casella) 'lab)
-                          ((member 'base casella) 'base)
-                          ((member 'bolla casella) 'bolla)
+  ;; Si la casella es agua, retornar solo (coord 'aigua)
+  (if (eq (car casella) 'aigua)
+      (list coord 'aigua)
+    ;; Para casillas de tierra, construir entrada completa
+    (let* ((tipus-casella (car casella))
+           (color-casella (obtenir-color-terra-casella casella))
+           (tipus-element (cond
+                            ((and unitat-casella (eq (nth 2 unitat-casella) 'base)) 'base)
+                            ((and unitat-casella (eq (nth 2 unitat-casella) 'bolla)) 'bolla)
+                            ((member 'lab casella) 'lab)
+                            ((member 'base casella) 'base)
+                            ((member 'bolla casella) 'bolla)
+                            (t nil)))
+           (equip (cond
+                    ((and unitat-casella (eq (nth 2 unitat-casella) 'base)) (nth 3 unitat-casella))
+                    ((and unitat-casella (eq (nth 2 unitat-casella) 'bolla)) (nth 3 unitat-casella))
+                    ((member 'lab casella) (obtenir-equip-lab-casella casella))
+                    ((member 'base casella) (cadr (member 'base casella)))
+                    ((member 'bolla casella) (cadr (member 'bolla casella)))
+                    (t nil)))
+           (colors-pintat (cond
+                            ((and unitat-casella (eq (nth 2 unitat-casella) 'base)) (nth 6 unitat-casella))
+                            ((and unitat-casella (eq (nth 2 unitat-casella) 'bolla)) (nth 6 unitat-casella))
+                            ((member 'lab casella) nil)
+                            (t nil)))
+           (color-propi (cond
+                          ((and unitat-casella (eq (nth 2 unitat-casella) 'base)) (nth 5 unitat-casella))
+                          ((and unitat-casella (eq (nth 2 unitat-casella) 'bolla)) (nth 5 unitat-casella))
                           (t nil)))
-         (equip (cond
-                  ((and unitat-casella (eq (nth 2 unitat-casella) 'base)) (nth 3 unitat-casella))
-                  ((and unitat-casella (eq (nth 2 unitat-casella) 'bolla)) (nth 3 unitat-casella))
-                  ((member 'lab casella) (obtenir-equip-lab-casella casella))
-                  ((member 'base casella) (cadr (member 'base casella)))
-                  ((member 'bolla casella) (cadr (member 'bolla casella)))
-                  (t nil)))
-         (colors-pintat (cond
-                          ((and unitat-casella (eq (nth 2 unitat-casella) 'base)) (nth 6 unitat-casella))
-                          ((and unitat-casella (eq (nth 2 unitat-casella) 'bolla)) (nth 6 unitat-casella))
-                          ((member 'lab casella) nil)
-                          (t nil)))
-         (color-propi (cond
-                        ((and unitat-casella (eq (nth 2 unitat-casella) 'base)) (nth 5 unitat-casella))
-                        ((and unitat-casella (eq (nth 2 unitat-casella) 'bolla)) (nth 5 unitat-casella))
+           (tr-pintar (cond
+                        ((and unitat-casella (eq (nth 2 unitat-casella) 'base)) (nth 7 unitat-casella))
+                        ((and unitat-casella (eq (nth 2 unitat-casella) 'bolla)) (nth 7 unitat-casella))
                         (t nil)))
-         (tr-pintar (cond
-                      ((and unitat-casella (eq (nth 2 unitat-casella) 'base)) (nth 7 unitat-casella))
-                      ((and unitat-casella (eq (nth 2 unitat-casella) 'bolla)) (nth 7 unitat-casella))
-                      (t nil)))
-         (tr-moure (cond
-                     ((and unitat-casella (eq (nth 2 unitat-casella) 'base)) (nth 8 unitat-casella))
-                     ((and unitat-casella (eq (nth 2 unitat-casella) 'bolla)) (nth 8 unitat-casella))
-                     (t nil))))
-    (list coord
-          tipus-casella
-          color-casella
-          tipus-element
-          equip
-          colors-pintat
-          color-propi
-          tr-pintar
-          tr-moure)))
+           (tr-moure (cond
+                       ((and unitat-casella (eq (nth 2 unitat-casella) 'base)) (nth 8 unitat-casella))
+                       ((and unitat-casella (eq (nth 2 unitat-casella) 'bolla)) (nth 8 unitat-casella))
+                       (t nil))))
+      (list coord
+            tipus-casella
+            color-casella
+            tipus-element
+            equip
+            colors-pintat
+            color-propi
+            tr-pintar
+            tr-moure))))
+
+;; ------------------------------------------------------------------
+;;  ------------------- DEBUG: IMPRIMIR VISIÓN -------------------
+;; ------------------------------------------------------------------
+
+(defun imprimir-visio (visio)
+  "Imprime la visión de una unitat de forma legible."
+  (princ "==== VISIÓN (")
+  (princ (length visio))
+  (princ " caselles) ====")
+  (terpri)
+  (imprimir-visio-rec visio 0))
+
+(defun imprimir-visio-rec (visio contador)
+  (cond
+    ((null visio) 
+     (princ "=====================================")
+     (terpri))
+    (t
+     (let* ((entrada (car visio))
+            (coord (nth 0 entrada))
+            (tipus-casella (nth 1 entrada))
+            (color-casella (nth 2 entrada))
+            (tipus-element (nth 3 entrada))
+            (equip (nth 4 entrada))
+            (colors-pintat (nth 5 entrada))
+            (color-propi (nth 6 entrada))
+            (tr-pintar (nth 7 entrada))
+            (tr-moure (nth 8 entrada)))
+       
+       ;; Imprimir coordenada y tipo de casella
+       (princ "[")
+       (princ contador)
+       (princ "] Pos:")
+       (princ coord)
+       (princ " | Casella:")
+       (princ tipus-casella)
+       (princ " | Color:")
+       (princ color-casella)
+       (terpri)
+       
+       ;; Imprimir elemento si existe
+       (if (not (null tipus-element))
+           (progn
+             (princ "    Elemento:")
+             (princ tipus-element)
+             (princ " | Equipo:")
+             (princ equip)
+             (princ " | Color-propi:")
+             (princ color-propi)
+             (terpri)))
+       
+       ;; Imprimir colores pintados y tiempos
+       (if (not (null colors-pintat))
+           (progn
+             (princ "    Colors-pintat:")
+             (princ colors-pintat)
+             (terpri)))
+       
+       (if (and (not (null tr-pintar)) (> tr-pintar 0))
+           (progn
+             (princ "    Tiempos - pintar:")
+             (princ tr-pintar)))
+       (if (and (not (null tr-moure)) (> tr-moure 0))
+           (progn
+             (princ " | moure:")
+             (princ tr-moure)))
+       (if (or (and (not (null tr-pintar)) (> tr-pintar 0))
+               (and (not (null tr-moure)) (> tr-moure 0)))
+           (terpri))
+       
+       (imprimir-visio-rec (cdr visio) (+ contador 1))))
+
+;; ------------------------------------------------------------------
+;;  ------------------- GENERADORES ALEATORIOS -------------------
+;; ------------------------------------------------------------------
+
+(defun generar-coord-aleatoria-valida-en-mapa (mapa unitats equip)
+  "Genera una coordenada aleatoria válida dentro del mapa (no agua, no labs, no bases de enemigos)."
+  (let* ((altura (length mapa))
+         (anchura (if (> altura 0) (length (car mapa)) 0)))
+    (generar-coord-aleatoria-valida-rec mapa unitats equip altura anchura 0)))
+
+(defun generar-coord-aleatoria-valida-rec (mapa unitats equip altura anchura intentos)
+  "Intenta generar coordenadas aleatorias hasta encontrar una válida (máx 50 intentos)."
+  (if (>= intentos 50)
+      nil  ; No hay más intentos, retornar nil
+    (let* ((x-random (random (if (> anchura 0) anchura 1)))
+           (y-random (random (if (> altura 0) altura 1)))
+           (coord (list x-random y-random))
+           (casella (obtenir-casella-mapa mapa coord))
+           (unitat-en-coord (obtenir-unitat-per-coord unitats coord)))
+      (cond
+        ;; Si la casella es válida (tierra, no agua, no ocupada)
+        ((and casella
+              (eq (car casella) 'terra)
+              (not (member 'agua casella))
+              (not (member 'lab casella))
+              (null unitat-en-coord)
+              (not (member 'bolla casella))
+              (not (member 'base casella)))
+         coord)
+        ;; Si no es válida, intentar de nuevo
+        (t
+         (generar-coord-aleatoria-valida-rec mapa unitats equip altura anchura (+ intentos 1)))))))
+
+(defun contar-bolas-en-rango (unitats coord rango)
+  "Cuenta cuántas bolas del mismo equipo hay en rango de la coordenada."
+  (contar-bolas-en-rango-rec unitats coord rango 0))
+
+(defun contar-bolas-en-rango-rec (unitats coord rango contador)
+  (cond
+    ((null unitats) contador)
+    ((and (eq (nth 2 (car unitats)) 'bolla)
+          (<= (dist2 (nth 4 (car unitats)) coord) rango))
+     (contar-bolas-en-rango-rec (cdr unitats) coord rango (+ contador 1)))
+    (t
+     (contar-bolas-en-rango-rec (cdr unitats) coord rango contador))))))
