@@ -101,37 +101,55 @@
              (move x-pos y-pos)
              (aplica-color color-casella)
              (rellena-quadrat x-pos y-pos mida)
+             
              ;; 2. CUADRÍCULA
              (color 0 0 0 0 0 0)
              (move x-pos y-pos)
              (quadrat mida)
-             ;; 3. UNIDADES
-             (cond ((member 'base casella)
-                    (let* ((color-interior (nth 1 casella))
-                           (color-equipo (if (eq equipo 'e1) 'lila 'taronja)))
-                      (aplica-color color-equipo)
-                      (rellena-quadrat (+ x-pos 4) (+ y-pos 4) (- mida 8))
-                      (color 0 0 0 0 0 0)
-                      (move (+ x-pos 4) (+ y-pos 4))
-                      (quadrat (- mida 8))))
-                   ((member 'lab casella)
-                    (let* ((cx (+ x-pos (/ mida 2))) (cy (+ y-pos (/ mida 2)))
-                           (r (- (/ mida 2) 2)))
-                      (aplica-color 'groc)
-                      (move (truncate (- cx r)) (truncate cy)) (drawrel (truncate (* 2 r)) 0)
-                      (move (truncate cx) (truncate (- cy r))) (drawrel 0 (truncate (* 2 r)))))
-                   ((member 'bolla casella)
-                    (let* ((cx (truncate (+ x-pos (/ mida 2))))
-                           (cy (truncate (+ y-pos (/ mida 2))))
-                           (color-bola-original (cadr (member 'bolla casella)))
-                           (color-equipo (if (eq equipo 'e1) 'lila 'taronja)))
-                      (aplica-color color-equipo)
-                      (rellena-cercle cx cy 7)
-                      (aplica-color color-bola-original)
-                      (rellena-cercle cx cy 4)
-                      (color 255 255 255 255 255 255)
-                      (move cx (truncate (+ cy 3)))
-                      (draw cx (truncate (+ cy 3))))))
+             
+             ;; 3. UNIDADES REESCALABLES
+             (cond 
+               ;; --- BASES ---
+               ((member 'base casella)
+                (let* ((margen (truncate (* mida 0.2)))
+                       (mida-int (- mida (* 2 margen)))
+                       (color-eq (if (eq equipo 'e1) 'lila 'taronja)))
+                  (aplica-color color-eq)
+                  (rellena-quadrat (+ x-pos margen) (+ y-pos margen) mida-int)
+                  (color 0 0 0 0 0 0)
+                  (move (+ x-pos margen) (+ y-pos margen))
+                  (quadrat mida-int)))
+
+               ;; --- LABORATORIOS ---
+               ((member 'lab casella)
+                (let* ((cx (+ x-pos (/ mida 2))) (cy (+ y-pos (/ mida 2)))
+                       (r (- (/ mida 2) 1)))
+                  (aplica-color 'groc)
+                  (move (truncate (- cx r)) (truncate cy)) (drawrel (truncate (* 2 r)) 0)
+                  (move (truncate cx) (truncate (- cy r))) (drawrel 0 (truncate (* 2 r)))))
+
+               ;; --- BOLAS (REESCALADO DINÁMICO) ---
+               ((member 'bolla casella)
+                (let* ((cx (truncate (+ x-pos (/ mida 2))))
+                       (cy (truncate (+ y-pos (/ mida 2))))
+                       ;; Radios proporcionales al tamaño de la celda
+                       (r-equipo (truncate (* mida 0.4)))   ; 40% radio (80% total)
+                       (r-centro (truncate (* mida 0.2)))   ; 20% radio (40% total)
+                       (color-bola (cadr (member 'bolla casella)))
+                       (color-eq (if (eq equipo 'e1) 'lila 'taronja)))
+                  
+                  (aplica-color color-eq)
+                  (rellena-cercle cx cy r-equipo)
+                  
+                  (aplica-color color-bola)
+                  (rellena-cercle cx cy r-centro)
+                  
+                  ;; Brillo proporcional
+                  (color 255 255 255 255 255 255)
+                  (let ((offset (truncate (* mida 0.15))))
+                    (move cx (+ cy offset))
+                    (draw cx (+ cy offset))))))
+
              (color 0 0 0 0 0 0)
              (pinta-fila (cdr fila) (+ i 1) mida y)))))
 
@@ -209,14 +227,19 @@
     (pinta-matriu mapa m)
     (actualiza-hud estat)
     estat))
-
+    
 (defun ajusta-mida-mapa (mapa)
   (let* ((files (length mapa))
          (cols (length (car mapa))))
-    (cond ((and (= files 20) (= cols 20))
+    (cond ;; Mapas pequeños (20x20 o menos)
+          ((and (<= files 20) (<= cols 20))
            (setq xi 100 yi 20 m 15 g 1))
-          ((and (= files 50) (= cols 50))
-           (setq xi 100 yi 40 m 6 g 1))
+          
+          ;; Mapas grandes (50x50 o mayores)
+          ((or (>= files 50) (>= cols 50))
+           (setq xi 100 yi 30 m 5 g 0)) ; g=0 evita que el tablero se vea negro
+          
+          ;; Mapas medianos o cualquier otro caso
           (t (setq xi 100 yi 20 m 10 g 1)))))
 
 (defun rellena-cercle (cx cy radi)

@@ -262,6 +262,48 @@
     (t (agent-nms864-cel·la-explorar-rec coord (cdr visio) millor millor-dist))))
 
 ;; ============================================================
+;; GESTIÓ DE MEMÒRIA COMPARTIDA
+;; La memòria és una alist: ((base-enemiga coord) (darrera-vista ronda) ...)
+;; ============================================================
+
+(defun agent-nms864-actualitzar-memoria (memoria coord visio ronda)
+  "Retorna nova-memoria si hi ha nova informació rellevant, nil si no cal escriure."
+  (let ((base-vista (agent-nms864-cercar-base-enemiga-visio visio)))
+    (cond
+      ;; Si veiem la base: guardar posició i ronda
+      (base-vista
+       (list (list 'base-enemiga base-vista)
+             (list 'darrera-vista ronda)
+             (list 'posicio-propia coord)))
+      ;; Si no la veiem però tenim posició antiga: conservar-la i actualitzar posició pròpia
+      ((and memoria (assoc 'base-enemiga memoria))
+       (list (list 'base-enemiga (cadr (assoc 'base-enemiga memoria)))
+             (list 'darrera-vista (cadr (assoc 'darrera-vista memoria)))
+             (list 'posicio-propia coord)))
+      ;; Sense informació nova: nil (no escrivim res)
+      (t nil))))
+
+(defun agent-nms864-cercar-base-enemiga-visio (visio)
+  "Retorna la coord de la primera base vista a la visió, o nil."
+  (cond
+    ((null visio) nil)
+    ((and (agent-nms864-terra-p (car visio))
+          (eq (agent-nms864-cas-elem (car visio)) 'base))
+     (agent-nms864-cas-coord (car visio)))
+    (t (agent-nms864-cercar-base-enemiga-visio (cdr visio)))))
+
+(defun agent-nms864-objectiu-desde-memoria (memoria coord visio)
+  "Si la visió no mostra la base enemiga, usa la memòria per orientar-se."
+  (let ((base-visio (agent-nms864-buscar-base-enemiga-visio 'dummy coord visio)))
+    (cond
+      ;; Si la veiem directament, la usam
+      (base-visio base-visio)
+      ;; Si no la veiem però la tenim a la memòria, anem cap allà
+      ((and memoria (assoc 'base-enemiga memoria))
+       (cadr (assoc 'base-enemiga memoria)))
+      (t nil))))
+
+;; ============================================================
 ;; SELECCIÓ DE COLOR DE LA BOLLA (rotació per ronda)
 ;; Fem bolles dels tres colors per poder destruir la base enemiga.
 ;; ============================================================
@@ -296,21 +338,29 @@
       ;; La base crea una bolla per torn si té pintura suficient (50)
       ;; i hi ha una casella adjacent lliure.
       ((eq tipus 'base)
-       (let ((cel·la-lliure (agent-nms864-casella-lliure-adjacent coord visio)))
+       (let* ((cel·la-lliure (agent-nms864-casella-lliure-adjacent coord visio))
+              (nova-memoria (agent-nms864-actualitzar-memoria
+                             (agent-nms864-memoria dades) coord visio ronda)))
          (cond
            ((and cel·la-lliure (>= pintura 50))
             ;; Crear bolla rotant colors per tenir els tres colors actius
-            (list (list 'crea-bolla
-                        (list (agent-nms864-color-per-ronda ronda)
-                              cel·la-lliure))))
-           ;; Sense pintura o sense espai: no fer res
-           (t nil))))
+            (let ((accions (list (list 'crea-bolla
+                                       (list (agent-nms864-color-per-ronda ronda)
+                                             cel·la-lliure)))))
+              (if nova-memoria
+                  (append accions (list (list 'escriu-memoria (list nova-memoria))))
+                accions)))
+           ;; Sense pintura o sense espai: actualitzar memòria si cal
+           (t (if nova-memoria
+                  (list (list 'escriu-memoria (list nova-memoria)))
+                nil)))))
 
       ;; ---- BOLLA -----------------------------------------------
       ;; Una bolla pot fer UNA o MÉS accions per torn si tr < 1.
       ;; Prioritats:
       ;;   1. Pintar objectiu (base enemiga > bolla enemiga > lab)
       ;;   2. Moure's cap a l'objectiu estratègic
+      ;;   3. Escriure memòria si hem vist alguna cosa rellevant
       ((eq tipus 'bolla)
        (let* ((obj-pintar (agent-nms864-objectiu-pintar equip coord visio))
               (obj-moure  (agent-nms864-objectiu-moure equip coord visio ronda))
@@ -322,9 +372,16 @@
               (accio-moure
                (if (and obj-moure (< tr-moure 1))
                    (list (list 'mou (list obj-moure)))
+                 nil))
+              ;; Actualitzar memòria si veiem la base enemiga
+              (nova-memoria (agent-nms864-actualitzar-memoria
+                             (agent-nms864-memoria dades) coord visio ronda))
+              (accio-memoria
+               (if nova-memoria
+                   (list (list 'escriu-memoria (list nova-memoria)))
                  nil)))
-         ;; Retornem totes les accions possibles (pot fer les dues en el mateix torn)
-         (append accio-pintar accio-moure)))
+         ;; Retornem totes les accions possibles
+         (append accio-pintar accio-moure accio-memoria)))
 
       ;; ---- Altres tipus (no hauria de passar) ------------------
       (t nil))))

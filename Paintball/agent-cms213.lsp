@@ -229,6 +229,9 @@
          (tr-pintar (nth 8 dades))
          (tr-moure (nth 9 dades))
          (visio (nth 10 dades))
+         (memoria (nth 11 dades))
+         ;; Fusionam la memòria actual amb el que veiem ara
+         (nova-memoria (agent-cms213-actualitzar-memoria memoria coord visio ronda))
          (paint-target (agent-cms213-first-paint-target equip coord visio))
          (move-target (agent-cms213-first-move-target equip coord visio ronda))
          (free-cell (agent-cms213-first-free-cell coord visio)))
@@ -240,22 +243,56 @@
          (cond
            ;; Crear bolla si hay pintura suficiente y celda libre
            ((and (>= pintura 50) free-cell)
-            (list (list 'crea-bolla (list color-elegido free-cell))))
-           ;; Si no hay celdas libres, intentar en otra posición
-           (t nil))))
+            (list (list 'crea-bolla (list color-elegido free-cell))
+                  (list 'escriu-memoria (list nova-memoria))))
+           ;; Si no hay celdas libres, actualitzar memòria igualment
+           (t (list (list 'escriu-memoria (list nova-memoria)))))))
 
       ;; BOLLA: estratègia defensiva con ataque
       ((eq tipus 'bolla)
-       (cond
-         ;; Prioritat 1: Pintar objetivo (base enemiga > bolles > labs)
-         ((and paint-target (< tr-pintar 1))
-          (list (list 'pinta (list paint-target))))
-         
-         ;; Prioritat 2: Movarse hacia base enemiga o celda estratégica
-         ((and move-target (< tr-moure 1))
-          (list (list 'mou (list move-target))))
-         
-         ;; No pueden faire res
-         (t nil)))
+       (let ((accions-combat
+              (cond
+                ;; Prioritat 1: Pintar objetivo (base enemiga > bolles > labs)
+                ((and paint-target (< tr-pintar 1))
+                 (list (list 'pinta (list paint-target))))
+                ;; Prioritat 2: Movarse hacia base enemiga o celda estratégica
+                ((and move-target (< tr-moure 1))
+                 (list (list 'mou (list move-target))))
+                ;; No pueden faire res
+                (t nil))))
+         ;; Afegim actualització de memòria si hem vist alguna base enemiga
+         (let ((base-vista (agent-cms213-trobar-objetivo-estrategico equip coord visio)))
+           (if base-vista
+               (append accions-combat
+                       (list (list 'escriu-memoria
+                                   (list (agent-cms213-actualitzar-memoria memoria coord visio ronda)))))
+             accions-combat))))
 
       (t nil))))
+
+;; Actualitza la memòria compartida amb la posició de la base enemiga si es veu
+(defun agent-cms213-actualitzar-memoria (memoria coord visio ronda)
+  (let ((base-enemiga (agent-cms213-trobar-base-enemiga-visio visio)))
+    (cond
+      ;; Si veiem la base, guardam la seva posició i la ronda
+      (base-enemiga
+       (list (list 'base-enemiga base-enemiga)
+             (list 'darrera-vista ronda)
+             (list 'posicio-propia coord)))
+      ;; Si no la veiem però tenim posició antiga a la memòria, la conservam
+      ((and memoria (assoc 'base-enemiga memoria))
+       (let ((pos-antigua (cadr (assoc 'posicio-propia memoria))))
+         (list (list 'base-enemiga (cadr (assoc 'base-enemiga memoria)))
+               (list 'darrera-vista (cadr (assoc 'darrera-vista memoria)))
+               (list 'posicio-propia coord))))
+      ;; Sense informació
+      (t (list (list 'posicio-propia coord))))))
+
+;; Cerca la base enemiga a la visió (retorna coord o nil)
+(defun agent-cms213-trobar-base-enemiga-visio (visio)
+  (cond
+    ((null visio) nil)
+    ((and (eq (nth 1 (car visio)) 'terra)
+          (eq (nth 3 (car visio)) 'base))
+     (nth 0 (car visio)))
+    (t (agent-cms213-trobar-base-enemiga-visio (cdr visio)))))

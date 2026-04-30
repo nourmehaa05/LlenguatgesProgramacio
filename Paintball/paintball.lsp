@@ -1274,8 +1274,10 @@
     estat-final))
 
 (defun aplicar-escriu-memoria (estat unitat equip nova-memoria)
-  "Placeholder d'aplicacio d'escriu-memoria."
-  estat)
+  "Escriu el nou valor de la memòria compartida de l'equip a l'estat."
+  (if (eq equip 'e1)
+      (substituir-camp 'memoria-e1 nova-memoria estat)
+    (substituir-camp 'memoria-e2 nova-memoria estat)))
 
 (defun construir-visio-unitat (estat unitat)
   "Construeix la visió de la unitat segons el seu tipus."
@@ -1425,7 +1427,8 @@
            (terpri))
        
        (imprimir-visio-rec (cdr visio) (+ contador 1))))
-
+  )
+)
 ;; ------------------------------------------------------------------
 ;;  ------------------- GENERADORES ALEATORIOS -------------------
 ;; ------------------------------------------------------------------
@@ -1470,4 +1473,4 @@
           (<= (dist2 (nth 4 (car unitats)) coord) rango))
      (contar-bolas-en-rango-rec (cdr unitats) coord rango (+ contador 1)))
     (t
-     (contar-bolas-en-rango-rec (cdr unitats) coord rango contador))))))
+     (contar-bolas-en-rango-rec (cdr unitats) coord rango contador))))
