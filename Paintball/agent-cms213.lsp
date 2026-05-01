@@ -80,16 +80,29 @@
      (nth 0 (car visio)))
     (t (agent-cms213-first-paint-target-rec equip coord (cdr visio)))))
 
-;; Búsqueda AGRESIVA de la base enemiga - exploración inteligente
-;; E1 busca a E2 explorando sistemáticamente el sur del mapa
-(defun agent-cms213-first-move-target (equip coord visio ronda)
-  (let ((base-visible (agent-cms213-trobar-objetivo-estrategico equip coord visio)))
+;; Úsa la memòria compartida si la base no és visible
+(defun agent-cms213-objectiu-desde-memoria (memoria coord visio)
+  "Si la visió no mostra la base enemiga, usa la memòria per orientar-se.
+   USA LES FUNCIONS GENÈRIQUES DE memoria.lsp"
+  (let ((base-visio (agent-cms213-trobar-objetivo-estrategico 'e1 coord visio)))
     (cond
-      ;; CASO 1: VE LA BASE - PERSEGUIR AGRESIVAMENTE
+      ;; Si la veiem directament, la usam
+      (base-visio base-visio)
+      ;; Si no la veiem però la tenim a la memòria, anem cap allà
+      ((mem-llegir memoria 'base-enemiga)
+       (mem-llegir memoria 'base-enemiga))
+      (t nil))))
+
+;; Búsqueda AGRESIVA de la base enemiga - exploración inteligente
+;; E1 busca a E2 explorando sistemáticamente, usant la memòria per als casos que no es veu
+(defun agent-cms213-first-move-target (equip coord visio ronda memoria)
+  (let ((base-visible (agent-cms213-objectiu-desde-memoria memoria coord visio)))
+    (cond
+      ;; CASO 1: VE LA BASE O LA RECORDA - PERSEGUIR AGRESIVAMENTE
       (base-visible
        (agent-cms213-celda-hacia-objetivo coord base-visible visio))
       
-      ;; CASO 2: NO LA VE - EXPLORAR SISTEMÁTICAMENTE
+      ;; CASO 2: NO LA VE NI LA RECORDA - EXPLORAR SISTEMÁTICAMENTE
       ;; Explorar hacia el sur/este del mapa buscando a E2
       (t
        (agent-cms213-explorar-zona-busqueda coord visio ronda)))))
@@ -182,8 +195,8 @@
     ;; Si encontró una celda cerca del objetivo, usarla
     (if celda-cerca
         celda-cerca
-      ;; Si no hay nada cerca, moverse hacia el sur (Y mayor) para explorar
-      (agent-cms213-celda-exploracion coord-bolla visio))))
+      ;; Si no hay nada cerca, buscar la celda más lejana para explorar
+      (agent-cms213-buscar-celda-maxima-distancia coord-bolla visio nil 0))))
 
 (defun agent-cms213-celda-hacia-objetivo-rec (coord-bolla coord-objetivo visio mejor mejor-dist)
   (cond
@@ -233,7 +246,7 @@
          ;; Fusionam la memòria actual amb el que veiem ara
          (nova-memoria (agent-cms213-actualitzar-memoria memoria coord visio ronda))
          (paint-target (agent-cms213-first-paint-target equip coord visio))
-         (move-target (agent-cms213-first-move-target equip coord visio ronda))
+         (move-target (agent-cms213-first-move-target equip coord visio ronda memoria))
          (free-cell (agent-cms213-first-free-cell coord visio)))
 
     (cond
@@ -272,21 +285,21 @@
 
 ;; Actualitza la memòria compartida amb la posició de la base enemiga si es veu
 (defun agent-cms213-actualitzar-memoria (memoria coord visio ronda)
+  "Actualitza la memòria compartida amb info de la base enemiga si es veu.
+   USA LES FUNCIONS GENÈRIQUES DE memoria.lsp"
   (let ((base-enemiga (agent-cms213-trobar-base-enemiga-visio visio)))
     (cond
       ;; Si veiem la base, guardam la seva posició i la ronda
       (base-enemiga
-       (list (list 'base-enemiga base-enemiga)
-             (list 'darrera-vista ronda)
-             (list 'posicio-propia coord)))
+       (let* ((mem1 (mem-escriure memoria 'base-enemiga base-enemiga))
+              (mem2 (mem-escriure mem1 'darrera-vista ronda))
+              (mem3 (mem-escriure mem2 'posicio-propia coord)))
+         mem3))
       ;; Si no la veiem però tenim posició antiga a la memòria, la conservam
-      ((and memoria (assoc 'base-enemiga memoria))
-       (let ((pos-antigua (cadr (assoc 'posicio-propia memoria))))
-         (list (list 'base-enemiga (cadr (assoc 'base-enemiga memoria)))
-               (list 'darrera-vista (cadr (assoc 'darrera-vista memoria)))
-               (list 'posicio-propia coord))))
-      ;; Sense informació
-      (t (list (list 'posicio-propia coord))))))
+      ((mem-llegir memoria 'base-enemiga)
+       (mem-escriure memoria 'posicio-propia coord))
+      ;; Sense informació de base, però si guardem posició pròpia
+      (t (mem-escriure memoria 'posicio-propia coord)))))
 
 ;; Cerca la base enemiga a la visió (retorna coord o nil)
 (defun agent-cms213-trobar-base-enemiga-visio (visio)

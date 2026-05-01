@@ -267,19 +267,19 @@
 ;; ============================================================
 
 (defun agent-nms864-actualitzar-memoria (memoria coord visio ronda)
-  "Retorna nova-memoria si hi ha nova informació rellevant, nil si no cal escriure."
+  "Retorna nova-memoria si hi ha nova informació rellevant, nil si no cal escriure.
+   USA LES FUNCIONS GENÈRIQUES DE memoria.lsp"
   (let ((base-vista (agent-nms864-cercar-base-enemiga-visio visio)))
     (cond
       ;; Si veiem la base: guardar posició i ronda
       (base-vista
-       (list (list 'base-enemiga base-vista)
-             (list 'darrera-vista ronda)
-             (list 'posicio-propia coord)))
+       (let* ((mem1 (mem-escriure memoria 'base-enemiga base-vista))
+              (mem2 (mem-escriure mem1 'darrera-vista ronda))
+              (mem3 (mem-escriure mem2 'posicio-propia coord)))
+         mem3))
       ;; Si no la veiem però tenim posició antiga: conservar-la i actualitzar posició pròpia
       ((and memoria (assoc 'base-enemiga memoria))
-       (list (list 'base-enemiga (cadr (assoc 'base-enemiga memoria)))
-             (list 'darrera-vista (cadr (assoc 'darrera-vista memoria)))
-             (list 'posicio-propia coord)))
+       (mem-escriure memoria 'posicio-propia coord))
       ;; Sense informació nova: nil (no escrivim res)
       (t nil))))
 
@@ -293,14 +293,15 @@
     (t (agent-nms864-cercar-base-enemiga-visio (cdr visio)))))
 
 (defun agent-nms864-objectiu-desde-memoria (memoria coord visio)
-  "Si la visió no mostra la base enemiga, usa la memòria per orientar-se."
+  "Si la visió no mostra la base enemiga, usa la memòria per orientar-se.
+   USA LES FUNCIONS GENÈRIQUES DE memoria.lsp"
   (let ((base-visio (agent-nms864-buscar-base-enemiga-visio 'dummy coord visio)))
     (cond
       ;; Si la veiem directament, la usam
       (base-visio base-visio)
       ;; Si no la veiem però la tenim a la memòria, anem cap allà
-      ((and memoria (assoc 'base-enemiga memoria))
-       (cadr (assoc 'base-enemiga memoria)))
+      ((mem-llegir memoria 'base-enemiga)
+       (mem-llegir memoria 'base-enemiga))
       (t nil))))
 
 ;; ============================================================

@@ -70,7 +70,7 @@
   (drawrel (- mida) 0)
   (drawrel 0 (- mida)))
 
-(defun quadrat (mida &optional (gruix g))
+(defun quadrat (mida gruix)
   "Dibuixa un quadrat de mida `mida` - 1, i de gruix `gruix`, a la posició actual."
   (cond ((plusp gruix)
          (dibuixaquadrat (- mida 1))
@@ -88,7 +88,7 @@
            (drawrel mida 0)
            (rellena-quadrat-rec x0 y0 mida (+ i 1)))))
 
-(defun pinta-fila (fila i mida y)
+(defun pinta-fila (fila i mida y xi yi g)
   (cond ((null fila) t)
         (t (let* ((casella (car fila))
                   (x-pos (+ xi (* i mida)))
@@ -105,7 +105,7 @@
              ;; 2. CUADRÍCULA
              (color 0 0 0 0 0 0)
              (move x-pos y-pos)
-             (quadrat mida)
+             (quadrat mida g)
              
              ;; 3. UNIDADES REESCALABLES
              (cond 
@@ -113,12 +113,13 @@
                ((member 'base casella)
                 (let* ((margen (truncate (* mida 0.2)))
                        (mida-int (- mida (* 2 margen)))
-                       (color-eq (if (eq equipo 'e1) 'lila 'taronja)))
+                       (color-eq (cond ((eq equipo 'e1) 'lila)
+                                       (t 'taronja))))
                   (aplica-color color-eq)
                   (rellena-quadrat (+ x-pos margen) (+ y-pos margen) mida-int)
                   (color 0 0 0 0 0 0)
                   (move (+ x-pos margen) (+ y-pos margen))
-                  (quadrat mida-int)))
+                  (quadrat mida-int g)))
 
                ;; --- LABORATORIOS ---
                ((member 'lab casella)
@@ -136,7 +137,8 @@
                        (r-equipo (truncate (* mida 0.4)))   ; 40% radio (80% total)
                        (r-centro (truncate (* mida 0.2)))   ; 20% radio (40% total)
                        (color-bola (cadr (member 'bolla casella)))
-                       (color-eq (if (eq equipo 'e1) 'lila 'taronja)))
+                       (color-eq (cond ((eq equipo 'e1) 'lila)
+                                       (t 'taronja))))
                   
                   (aplica-color color-eq)
                   (rellena-cercle cx cy r-equipo)
@@ -151,7 +153,7 @@
                     (draw cx (+ cy offset))))))
 
              (color 0 0 0 0 0 0)
-             (pinta-fila (cdr fila) (+ i 1) mida y)))))
+             (pinta-fila (cdr fila) (+ i 1) mida y xi yi g)))))
 
 (defun extraer-color-casella (casella)
   (let* ((tipo (car casella)))
@@ -164,14 +166,14 @@
                    (t 'terra))))
           (t 'terra))))
 
-(defun pinta-matriu (matriu mida)
-  (pinta-matriu-rec (reverse matriu) mida 0))
+(defun pinta-matriu (matriu mida xi yi g)
+  (pinta-matriu-rec (reverse matriu) mida 0 xi yi g))
 
-(defun pinta-matriu-rec (matriu mida y)
+(defun pinta-matriu-rec (matriu mida y xi yi g)
   (cond ((null matriu) (color 0 0 0 255 255 255))
         (t (move xi (+ yi (* y mida)))
-           (pinta-fila (car matriu) 0 mida y)
-           (pinta-matriu-rec (cdr matriu) mida (+ y 1)))))
+           (pinta-fila (car matriu) 0 mida y xi yi g)
+           (pinta-matriu-rec (cdr matriu) mida (+ y 1) xi yi g))))
 
 ;; ------------------------------------------------------------------
 ;;  ------------------- HUD Y AJUSTES -------------------
@@ -199,7 +201,8 @@
   (cond ((null fila) 0)
         (t (let* ((celda (car fila))
                   (lab-info (member 'lab celda)))
-             (+ (if (and (eq (car celda) 'terra) lab-info (eq (cadr lab-info) equip)) 1 0)
+             (+ (cond ((and (eq (car celda) 'terra) lab-info (eq (cadr lab-info) equip)) 1)
+                          (t 0))
                 (hud-contar-labs-fila (cdr fila) equip))))))
 
 (defun actualiza-hud (estat)
@@ -222,25 +225,30 @@
     t))
 
 (defun pinta (estat)
-  (let* ((mapa (cadr (assoc 'mapa estat))))
-    (ajusta-mida-mapa mapa)
-    (pinta-matriu mapa m)
+  (let* ((mapa (cadr (assoc 'mapa estat)))
+         (parametros (ajusta-mida-mapa mapa))
+         (xi-valor (nth 0 parametros))
+         (yi-valor (nth 1 parametros))
+         (m-valor (nth 2 parametros))
+         (g-valor (nth 3 parametros)))
+    (pinta-matriu mapa m-valor xi-valor yi-valor g-valor)
     (actualiza-hud estat)
     estat))
     
 (defun ajusta-mida-mapa (mapa)
+  "Retorna una lista (xi yi m g) según el tamaño del mapa."
   (let* ((files (length mapa))
          (cols (length (car mapa))))
     (cond ;; Mapas pequeños (20x20 o menos)
           ((and (<= files 20) (<= cols 20))
-           (setq xi 100 yi 20 m 15 g 1))
+           (list 100 20 15 1))
           
           ;; Mapas grandes (50x50 o mayores)
           ((or (>= files 50) (>= cols 50))
-           (setq xi 100 yi 30 m 5 g 0)) ; g=0 evita que el tablero se vea negro
+           (list 100 30 5 0)) ; g=0 evita que el tablero se vea negro
           
           ;; Mapas medianos o cualquier otro caso
-          (t (setq xi 100 yi 20 m 10 g 1)))))
+          (t (list 100 20 10 1)))))
 
 (defun rellena-cercle (cx cy radi)
   (rellena-cercle-rec cx cy radi (- radi)))
