@@ -593,8 +593,7 @@
           (validar-pinta estat unitat equip (car arguments)))
          ((eq tipus-accio 'mou)
           (validar-mou estat unitat equip (car arguments)))
-         ((eq tipus-accio 'escriu-memoria)
-          (validar-escriu-memoria estat unitat equip (car arguments)))
+         ((eq tipus-accio 'escriu-memoria) t)  ;; sempre vàlid
          (t nil))))))
 
 (defun aplicar-accio (estat unitat equip accio)
@@ -703,42 +702,39 @@
 ;       3. Coordenada dins mapa
 ;       4. Coordenada no aigua
 ;       5. Coordenada no ocupada
+(defun validar-coord-base (estat coord)
+  "Comprova que una coordenada és vàlida, dins del mapa i no és aigua."
+  (and (coord-valida-p coord)
+       (coordenada-accio-dins-mapa-p estat coord)
+       (coordenada-accio-no-aigua-p estat coord)))
+
 
 (defun validar-crea-bolla (estat unitat equip color coord)
-  "Validacio base de crea-bolla."
+  "Valida l'acció crea-bolla d'una base."
   (and (eq (nth 2 unitat) 'base)
-    (temps-unitat-disponible-p unitat 'crear)
+       (temps-unitat-disponible-p unitat 'crear)
        (pintura-suficient-crea-bolla-p estat equip)
-  (coord-valida-p coord)
-  (member color '(r g b))
-  (coordenada-accio-dins-rang-base-p unitat coord)
-  (coordenada-accio-dins-mapa-p estat coord)
-  (coordenada-accio-no-aigua-p estat coord)
-  (coordenada-accio-lliure-p estat coord)))
+       (member color '(r g b))
+       (validar-coord-base estat coord)
+       (coordenada-accio-dins-rang-base-p unitat coord)
+       (coordenada-accio-lliure-p estat coord)))
 
 (defun validar-pinta (estat unitat equip coord)
-  "Validacio base de pinta."
+  "Valida l'acció pinta d'una bolla."
   (and (eq (nth 2 unitat) 'bolla)
        (temps-unitat-disponible-p unitat 'pintar)
-  (coord-valida-p coord)
-  (coordenada-accio-dins-rang-pinta-p unitat coord)
-  (coordenada-accio-dins-mapa-p estat coord)
-  (coordenada-accio-no-aigua-p estat coord)
-  (coordenada-accio-pintable-p estat unitat equip coord)))
+       (validar-coord-base estat coord)
+       (coordenada-accio-dins-rang-pinta-p unitat coord)
+       (coordenada-accio-pintable-p estat unitat equip coord)))
 
 (defun validar-mou (estat unitat equip coord)
-  "Validacio base de mou."
+  "Valida l'acció mou d'una bolla."
   (and (eq (nth 2 unitat) 'bolla)
        (temps-unitat-disponible-p unitat 'moure)
-    (coord-valida-p coord)
-    (coordenada-accio-dins-rang-mou-p unitat coord)
-    (coordenada-accio-dins-mapa-p estat coord)
-    (coordenada-accio-no-aigua-p estat coord)
-    (coordenada-accio-lliure-p estat coord)))
+       (validar-coord-base estat coord)
+       (coordenada-accio-dins-rang-mou-p unitat coord)
+       (coordenada-accio-lliure-p estat coord)))
 
-(defun validar-escriu-memoria (estat unitat equip nova-memoria)
-  "Permet escriure memoria compartida (afegiu restriccions si voleu)."
-  t)
 
 (defun temps-unitat-disponible-p (unitat tipus-accio)
   (let ((temps (cond
@@ -1234,51 +1230,31 @@
          (unitat-actual (obtenir-unitat-per-id unitats (nth 1 unitat)))
          (coord-origen (nth 4 unitat-actual))
          (tr-extra (recuperacio-mou unitat estat coord))
-         (unitat-moguda
-          (cond
-            (unitat-actual
-             (actualitzar-unitat unitat-actual
-                                 (nth 7 unitat-actual)
-                     (incrementar-si-numero (nth 8 unitat-actual) tr-extra)
-                                 (nth 9 unitat-actual)))
-            (t nil)))
-         (unitats1
-          (cond
-            (unitat-moguda
-             (actualitzar-unitat-per-coord unitats coord-origen
-                                           (list 'unitat
-                                                 (nth 1 unitat-moguda)
-                                                 (nth 2 unitat-moguda)
-                                                 (nth 3 unitat-moguda)
-                                                 coord
-                                                 (nth 5 unitat-moguda)
-                                                 (nth 6 unitat-moguda)
-                                                 (nth 7 unitat-moguda)
-                                                 (nth 8 unitat-moguda)
-                                                 (nth 9 unitat-moguda))))
-            (t unitats)))
+         (unitat-moguda (actualitzar-unitat unitat-actual
+                                            (nth 7 unitat-actual)
+                                            (incrementar-si-numero (nth 8 unitat-actual) tr-extra)
+                                            (nth 9 unitat-actual)))
+         (unitat-final (moure-unitat unitat-moguda coord))
+         (unitats1 (actualitzar-unitat-per-coord unitats coord-origen unitat-final))
          (mapa (cadr (assoc 'mapa estat)))
-         (casella-origen (obtenir-casella-mapa mapa coord-origen))
-         (color-terra-origen (obtenir-color-terra-casella casella-origen))
-         (casella-origen-buida
-          (list 'terra color-terra-origen))
-         (casella-desti-orig (obtenir-casella-mapa mapa coord))
-         (color-terra-desti (obtenir-color-terra-casella casella-desti-orig))
+         (color-origen (obtenir-color-terra-casella (obtenir-casella-mapa mapa coord-origen)))
+         (color-desti (obtenir-color-terra-casella (obtenir-casella-mapa mapa coord)))
          (color-bolla (nth 5 unitat))
-         (casella-desti
-          (list 'terra color-terra-desti 'bolla
-                color-bolla
-                (nth 1 unitat)
-                equip
-                (nth 6 unitat)
-                (nth 7 unitat-moguda)
-                (nth 8 unitat-moguda)))
-         (mapa1 (actualitzar-casella-mapa mapa coord-origen casella-origen-buida))
-         (mapa2 (actualitzar-casella-mapa mapa1 coord casella-desti))
-         (estat1 (substituir-camp 'unitats unitats1 estat))
-         (estat-final (substituir-camp 'mapa mapa2 estat1)))
-    ;; Evitar redibujado en aplicar-mou - la función pinta() lo hará en la siguiente iteración
-    estat-final))
+         (mapa1 (actualitzar-casella-mapa mapa coord-origen (list 'terra color-origen)))
+         (mapa2 (actualitzar-casella-mapa mapa1 coord
+                  (list 'terra color-desti 'bolla color-bolla
+                        (nth 1 unitat) equip (nth 6 unitat)
+                        (nth 7 unitat-final) (nth 8 unitat-final))))
+         (estat1 (substituir-camp 'unitats unitats1 estat)))
+    (substituir-camp 'mapa mapa2 estat1)))
+
+(defun moure-unitat (u nova-coord)
+  "Retorna la unitat u amb la coordenada actualitzada."
+  (list 'unitat
+        (nth 1 u) (nth 2 u) (nth 3 u)
+        nova-coord
+        (nth 5 u) (nth 6 u) (nth 7 u) (nth 8 u) (nth 9 u)))
+
 
 (defun aplicar-escriu-memoria (estat unitat equip nova-memoria)
   "Escriu el nou valor de la memòria compartida de l'equip a l'estat."
@@ -1308,71 +1284,58 @@
             (oy (cadr coord-origen))
             (x (+ ox dx))
             (y (+ oy dy))
-            (coord (list x y))
             (d2 (+ (* dx dx) (* dy dy))))
        (cond
-         ((and (<= d2 rango)
-               (>= x 0)
-               (>= y 0)
-               (not (null (obtenir-casella-mapa mapa coord))))
-          (let* ((casella (obtenir-casella-mapa mapa coord))
-                 (unitat-casella (obtenir-unitat-per-coord unitats coord)))
-            (cons (construir-entrada-visio coord casella unitat-casella)
-                  (construir-visio-dx mapa unitats coord-origen rango r dx (+ dy 1)))))
+         ((and (<= d2 rango) (>= x 0) (>= y 0))
+          (let* ((casella (obtenir-casella-mapa mapa (list x y))))  ;; una sola crida
+            (cond
+              ((not (null casella))
+               (let* ((coord (list x y))
+                      (unitat-casella (obtenir-unitat-per-coord unitats coord)))
+                 (cons (construir-entrada-visio coord casella unitat-casella)
+                       (construir-visio-dx mapa unitats coord-origen rango r dx (+ dy 1)))))
+              (t
+               (construir-visio-dx mapa unitats coord-origen rango r dx (+ dy 1))))))
          (t
           (construir-visio-dx mapa unitats coord-origen rango r dx (+ dy 1))))))))
 
 
-
 (defun construir-entrada-visio (coord casella unitat-casella)
-  ;; Si la casella es agua, retornar solo (coord 'aigua)
+  "Construeix l'entrada de visió per a una casella."
   (cond
     ((eq (car casella) 'aigua)
      (list coord 'aigua))
-    ;; Para casillas de tierra, construir entrada completa
     (t
      (let* ((tipus-casella (car casella))
-            (color-casella (obtenir-color-terra-casella casella))
-            (tipus-element (cond
-                             ((and unitat-casella (eq (nth 2 unitat-casella) 'base)) 'base)
-                             ((and unitat-casella (eq (nth 2 unitat-casella) 'bolla)) 'bolla)
-                             ((member 'lab casella) 'lab)
-                             ((member 'base casella) 'base)
-                             ((member 'bolla casella) 'bolla)
-                             (t nil)))
-            (equip (cond
-                     ((and unitat-casella (eq (nth 2 unitat-casella) 'base)) (nth 3 unitat-casella))
-                     ((and unitat-casella (eq (nth 2 unitat-casella) 'bolla)) (nth 3 unitat-casella))
-                     ((member 'lab casella) (obtenir-equip-lab-casella casella))
-                     ((member 'base casella) (cadr (member 'base casella)))
-                     ((member 'bolla casella) (cadr (member 'bolla casella)))
-                     (t nil)))
-            (colors-pintat (cond
-                             ((and unitat-casella (eq (nth 2 unitat-casella) 'base)) (nth 6 unitat-casella))
-                             ((and unitat-casella (eq (nth 2 unitat-casella) 'bolla)) (nth 6 unitat-casella))
-                             ((member 'lab casella) nil)
-                             (t nil)))
-            (color-propi (cond
-                           ((and unitat-casella (eq (nth 2 unitat-casella) 'base)) (nth 5 unitat-casella))
-                           ((and unitat-casella (eq (nth 2 unitat-casella) 'bolla)) (nth 5 unitat-casella))
-                           (t nil)))
-            (tr-pintar (cond
-                         ((and unitat-casella (eq (nth 2 unitat-casella) 'base)) (nth 7 unitat-casella))
-                         ((and unitat-casella (eq (nth 2 unitat-casella) 'bolla)) (nth 7 unitat-casella))
-                         (t nil)))
-            (tr-moure (cond
-                        ((and unitat-casella (eq (nth 2 unitat-casella) 'base)) (nth 8 unitat-casella))
-                        ((and unitat-casella (eq (nth 2 unitat-casella) 'bolla)) (nth 8 unitat-casella))
-                        (t nil))))
+            (color-casella (cadr casella))
+            ;; Extreim el tipus d'element una sola vegada
+            (te (cond
+                  ((and unitat-casella (eq (nth 2 unitat-casella) 'base)) 'base)
+                  ((and unitat-casella (eq (nth 2 unitat-casella) 'bolla)) 'bolla)
+                  ((member 'lab casella) 'lab)
+                  ((member 'base casella) 'base)
+                  ((member 'bolla casella) 'bolla)
+                  (t nil)))
+            ;; Si hi ha unitat, els seus camps; si no, tot nil
+            (eq-u  (and unitat-casella (nth 3 unitat-casella)))
+            (col-p (and unitat-casella (nth 6 unitat-casella)))
+            (col-pr (and unitat-casella (nth 5 unitat-casella)))
+            (tr-p  (and unitat-casella (nth 7 unitat-casella)))
+            (tr-m  (and unitat-casella (nth 8 unitat-casella)))
+            ;; Equip del lab si no hi ha unitat
+            (eq-lab (and (null unitat-casella)
+                         (member 'lab casella)
+                         (obtenir-equip-lab-casella casella)))
+            (equip-final (cond (eq-u eq-u) (eq-lab eq-lab) (t nil))))
        (list coord
              tipus-casella
              color-casella
-             tipus-element
-             equip
-             colors-pintat
-             color-propi
-             tr-pintar
-             tr-moure)))))
+             te
+             equip-final
+             col-p
+             col-pr
+             tr-p
+             tr-m)))))
 
 
 ;; ------------------------------------------------------------------
