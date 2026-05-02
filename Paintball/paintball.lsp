@@ -167,7 +167,10 @@
      (list 'pintura-e2 200)
 
      (list 'memoria-e1 nil)
-     (list 'memoria-e2 nil))))
+     (list 'memoria-e2 nil)
+     
+     (list 'labs-e1 0)      ;; comptador labs capturats per e1
+     (list 'labs-e2 0))))   ;; comptador labs capturats per e2
 
 ; estructura unitats:
 ; (unitat id tipus equip coord color-propi colors tr-pintar tr-moure tr-crear)
@@ -333,8 +336,9 @@
 (defun actualitzar-pintura (estat)
   (let* (
          (torn (cadr (assoc 'torn estat)))
-         (mapa (cadr (assoc 'mapa estat)))
-         (labs (contar-labs mapa torn))
+         (labs (cond
+                 ((eq torn 'e1) (cadr (assoc 'labs-e1 estat)))
+                 (t             (cadr (assoc 'labs-e2 estat)))))
         )
     (cond
       ((eq torn 'e1)
@@ -1014,44 +1018,37 @@
 ; quan una bolla els pinta --> tornen de l'equip
 
 
-(defun contar-labs (mapa equip) ; SI TENEMOS UN MAPA MUY GRANDE A LO MEJOR RENTA AÑADIR UN CONTADOR AL ESTADO.
-"Contam els laboratoris d'un equip."
+
+
+
+(defun actualitzar-comptadors-lab (estat casella-desti equip)
+  "Actualitza els comptadors de labs quan una bolla pinta un lab."
   (cond
-    ((null mapa) 0)
+    ((not (member 'lab casella-desti)) estat)
     (t
-     (+ (contar-labs-fila (car mapa) equip)
-        (contar-labs (cdr mapa) equip)))))
-
-;(defun contar-labs-fila (fila equip)
-;  (cond
-;    ((null fila) 0)
-;    (t
-;     (+ (if (and (eq (car (car fila)) 'terra)
-;                 (member 'lab (car fila))
-;                 (eq (cadr (member 'lab (car fila))) equip))
-;            1
-;          0)
-;        (contar-labs-fila (cdr fila) equip)))))
-
-
-(defun contar-labs-fila (fila equip)
-  (cond
-    ((null fila) 0)
-    (t
-     (let* (
-            (celda (car fila))
-            (lab-info (member 'lab celda))
-           )
-       (+ (cond
-            ((and (eq (car celda) 'terra)
-                  lab-info
-                  (eq (cadr lab-info) equip))
-             1)
-            (t 0))
-          (contar-labs-fila (cdr fila) equip))))))
-
-
-
+     (let* ((equip-anterior (obtenir-equip-lab-casella casella-desti))
+            ;; Si el lab ja era de l'equip atacant, no canvia res
+            ;; (coordenada-accio-pintable-p ja ho hauria impedit, però per seguretat)
+            (mateix-equip (eq equip-anterior equip))
+            (equip-contrari (cond ((eq equip 'e1) 'e2) (t 'e1)))
+            (clau-propi  (cond ((eq equip 'e1) 'labs-e1) (t 'labs-e2)))
+            (clau-contrari (cond ((eq equip 'e1) 'labs-e2) (t 'labs-e1))))
+       (cond
+         (mateix-equip estat)
+         (t
+          (let* (
+                 ;; L'equip atacant guanya el lab
+                 (labs-propi-actual (cadr (assoc clau-propi estat)))
+                 (estat1 (substituir-camp clau-propi (+ labs-propi-actual 1) estat))
+                 ;; Si el lab era de l'equip contrari, el perd
+                 (estat2 (cond
+                           ((eq equip-anterior equip-contrari)
+                            (let ((labs-contrari-actual (cadr (assoc clau-contrari estat1))))
+                              (substituir-camp clau-contrari
+                                              (max 0 (- labs-contrari-actual 1))
+                                              estat1)))
+                           (t estat1))))
+            estat2)))))))
 ;; ------------------------------------------------------------------
 ;;  ------------------- GESTIÓ DISTÀNCIES -------------------
 ;; ------------------------------------------------------------------
@@ -1124,7 +1121,6 @@
          (casella-desti (obtenir-casella-mapa mapa coord))
          (color-bolla (nth 5 unitat))
          (tr-extra (recuperacio-pinta unitat estat))
-         ;; Solo cambiamos el color de la casilla si es diferente al color del ataque
          (color-actual-terra (obtenir-color-terra-casella casella-desti))
          (casella-pintada (cond
                             ((eq color-actual-terra color-bolla) casella-desti)
@@ -1181,7 +1177,6 @@
             ((null unitat-desti) unitats1)
             ((eq (nth 3 unitat-desti) equip) unitats1)
             ((eq (nth 2 unitat-desti) 'base)
-             ;; Si la base tiene 3 colores, eliminarla; si no, actualizarla
              (cond
                ((and (listp colors-desti) (= (length colors-desti) 3))
                 (eliminar-unitat-per-coord unitats1 coord))
@@ -1199,37 +1194,32 @@
             ((member 'lab casella-desti)
              (canviar-lab-equip-casella casella-pintada equip))
             ((member 'bolla casella-desti)
-             ;; Si la bolla explota (3 colores), queda solo la tierra pintada
              (cond
                ((and (listp colors-desti) (= (length colors-desti) 3))
                 (list 'terra color-bolla))
-               ;; Si no explota, actualizar casella de bolla con los nuevos colors-pintat
                (t
                 (let ((bolla (member 'bolla casella-desti)))
                   (list 'terra color-bolla 'bolla
-                        (cadr bolla)                    ; color-propi
-                        (caddr bolla)                   ; id
-                        (cadddr bolla)                  ; equip
-                        colors-desti                    ; colors-pintat ACTUALIZADO
-                        (cadr (cddddr bolla))           ; tr-pintar
+                        (cadr bolla)
+                        (caddr bolla)
+                        (cadddr bolla)
+                        colors-desti
+                        (cadr (cddddr bolla))
                         (caddr (cddddr bolla)))))))
             ((member 'base casella-desti)
-             ;; Si la base explota (3 colores), eliminarla del mapa Y ASEGURAR QUE SE VEA LA TIERRA
              (cond
                ((and (listp colors-desti) (= (length colors-desti) 3))
                 (list 'terra color-bolla))
-               ;; Si no explota, actualizar con los nuevos colores y cambiar color de casella
                (t
                 (let ((base (member 'base casella-desti)))
-                  ;; CAMBIO: Mantener color de la base pero actualizar sus colores internos
                   (list 'terra color-bolla 'base
-                        (cadr base)                   ; equip
-                        colors-desti)))))              ; colors-pintat ACTUALIZADO
+                        (cadr base)
+                        colors-desti)))))
             (t casella-pintada)))
          (mapa1 (actualitzar-casella-mapa mapa coord nova-casella))
          (estat1 (substituir-camp 'mapa mapa1 estat))
-         (estat-final (substituir-camp 'unitats unitats2 estat1)))
-    ;; Evitar redibujado en aplicar-pinta - la función pinta() lo hará en la siguiente iteración
+         (estat2 (substituir-camp 'unitats unitats2 estat1))
+         (estat-final (actualitzar-comptadors-lab estat2 casella-desti equip)))
     estat-final))
 
 (defun aplicar-mou (estat unitat equip coord)
