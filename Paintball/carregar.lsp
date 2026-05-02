@@ -1,8 +1,0 @@
-;(load "agent-cms213.lsp")
-;(load "agent-nms864.lsp")
-(load "sleep.lsp")
-(load "memoria.lsp")
-(load "agent-nms864.lsp")
-(load "agent-cms213.lsp")
-(load "grafics.lsp")
-(load "paintball.lsp")

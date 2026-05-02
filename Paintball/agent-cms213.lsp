@@ -76,9 +76,9 @@
 (defun agent-cms213-primer-objectiu-pintura (equip coord visio)
   "Retorna la coordenada de l'objectiu prioritari per pintar (base > bolla > lab)."
   (let ((base (agent-cms213-cercar-base-en-rang equip coord visio)))
-    (if base
-        base
-      (agent-cms213-primer-objectiu-pintura-rec equip coord visio))))
+    (cond
+      (base base)
+      (t (agent-cms213-primer-objectiu-pintura-rec equip coord visio)))))
 
 (defun agent-cms213-cercar-base-en-rang (equip coord visio)
   "Retorna la coordenada de la base enemiga dins rang de pintura (d²≤5), o nil."
@@ -144,11 +144,13 @@
           (eq (nth 3 (car visio)) 'base)
           (not (eq (nth 4 (car visio)) equip)))
      (let ((dist (agent-cms213-dist2 coord (nth 0 (car visio)))))
-       (if (< dist millor-dist)
-           (agent-cms213-cercar-base-enemiga-rec equip coord (cdr visio)
-                                                 (nth 0 (car visio)) dist)
-         (agent-cms213-cercar-base-enemiga-rec equip coord (cdr visio)
-                                               millor millor-dist))))
+       (cond
+         ((< dist millor-dist)
+          (agent-cms213-cercar-base-enemiga-rec equip coord (cdr visio)
+                                                (nth 0 (car visio)) dist))
+         (t
+          (agent-cms213-cercar-base-enemiga-rec equip coord (cdr visio)
+                                                millor millor-dist)))))
     (t (agent-cms213-cercar-base-enemiga-rec equip coord (cdr visio) millor millor-dist))))
 
 ;; ============================================================
@@ -182,17 +184,18 @@
                                      (+ (cadr coord) (truncate (* 100 (sin angle-variat))))))
          (casella-aleatoria    (agent-cms213-casella-cap-a-objectiu-rec
                                 coord objectiu-aleatori visio nil 1000000)))
-    (if casella-aleatoria
-        casella-aleatoria
-      (let* ((desfasament      (+ (car coord) (cadr coord)))
-             (angle            (* (+ ronda desfasament) 0.7853))
-             (objectiu-imaginari (list (+ (car coord) (truncate (* 100 (cos angle))))
-                                       (+ (cadr coord) (truncate (* 100 (sin angle))))))
-             (casella          (agent-cms213-casella-cap-a-objectiu-rec
-                                coord objectiu-imaginari visio nil 1000000)))
-        (if casella
-            casella
-          (agent-cms213-cercar-casella-maxima-distancia coord visio nil 0))))))
+    (cond
+      (casella-aleatoria casella-aleatoria)
+      (t
+       (let* ((desfasament       (+ (car coord) (cadr coord)))
+              (angle             (* (+ ronda desfasament) 0.7853))
+              (objectiu-imaginari (list (+ (car coord) (truncate (* 100 (cos angle))))
+                                        (+ (cadr coord) (truncate (* 100 (sin angle))))))
+              (casella           (agent-cms213-casella-cap-a-objectiu-rec
+                                  coord objectiu-imaginari visio nil 1000000)))
+         (cond
+           (casella casella)
+           (t (agent-cms213-cercar-casella-maxima-distancia coord visio nil 0))))))))
 
 (defun agent-cms213-cercar-casella-maxima-distancia (coord visio millor millor-dist)
   "Retorna la cel·la adjacent lliure de major distància a coord per explorar."
@@ -201,11 +204,13 @@
     ((and (agent-cms213-casella-lliure-p 'dummy (car visio))
           (<= (agent-cms213-dist2 coord (nth 0 (car visio))) 2))
      (let ((dist (agent-cms213-dist2 coord (nth 0 (car visio)))))
-       (if (> dist millor-dist)
-           (agent-cms213-cercar-casella-maxima-distancia coord (cdr visio)
-                                                         (nth 0 (car visio)) dist)
-         (agent-cms213-cercar-casella-maxima-distancia coord (cdr visio)
-                                                       millor millor-dist))))
+       (cond
+         ((> dist millor-dist)
+          (agent-cms213-cercar-casella-maxima-distancia coord (cdr visio)
+                                                        (nth 0 (car visio)) dist))
+         (t
+          (agent-cms213-cercar-casella-maxima-distancia coord (cdr visio)
+                                                        millor millor-dist)))))
     (t (agent-cms213-cercar-casella-maxima-distancia coord (cdr visio) millor millor-dist))))
 
 ;; ============================================================
@@ -216,9 +221,9 @@
   "Retorna la cel·la adjacent lliure que minimitza la distància a coord-objectiu."
   (let ((casella-propera (agent-cms213-casella-cap-a-objectiu-rec
                           coord-bolla coord-objectiu visio nil 100000)))
-    (if casella-propera
-        casella-propera
-      (agent-cms213-cercar-casella-maxima-distancia coord-bolla visio nil 0))))
+    (cond
+      (casella-propera casella-propera)
+      (t (agent-cms213-cercar-casella-maxima-distancia coord-bolla visio nil 0)))))
 
 (defun agent-cms213-casella-cap-a-objectiu-rec (coord-bolla coord-objectiu visio millor millor-dist)
   "Recorre la visió cercant la cel·la adjacent lliure més propera a coord-objectiu."
@@ -228,11 +233,13 @@
           (<= (agent-cms213-dist2 coord-bolla (nth 0 (car visio))) 2))
      (let* ((coord-casella (nth 0 (car visio)))
             (dist-nova     (agent-cms213-dist2 coord-casella coord-objectiu)))
-       (if (< dist-nova millor-dist)
-           (agent-cms213-casella-cap-a-objectiu-rec coord-bolla coord-objectiu
-                                                     (cdr visio) coord-casella dist-nova)
-         (agent-cms213-casella-cap-a-objectiu-rec coord-bolla coord-objectiu
-                                                   (cdr visio) millor millor-dist))))
+       (cond
+         ((< dist-nova millor-dist)
+          (agent-cms213-casella-cap-a-objectiu-rec coord-bolla coord-objectiu
+                                                    (cdr visio) coord-casella dist-nova))
+         (t
+          (agent-cms213-casella-cap-a-objectiu-rec coord-bolla coord-objectiu
+                                                    (cdr visio) millor millor-dist)))))
     (t (agent-cms213-casella-cap-a-objectiu-rec coord-bolla coord-objectiu
                                                  (cdr visio) millor millor-dist))))
 
@@ -315,10 +322,11 @@
                  (list (list 'mou (list obj-moviment))))
                 (t nil))))
          (let ((base-vista (agent-cms213-trobar-objectiu-estrategic equip coord visio)))
-           (if base-vista
-               (append accions-combat
-                       (list (list 'escriu-memoria
-                                   (list (agent-cms213-actualitzar-memoria
-                                          memoria coord visio ronda)))))
-             accions-combat))))
+           (cond
+             (base-vista
+              (append accions-combat
+                      (list (list 'escriu-memoria
+                                  (list (agent-cms213-actualitzar-memoria
+                                         memoria coord visio ronda))))))
+             (t accions-combat)))))
       (t nil))))
