@@ -219,9 +219,12 @@
     (goto-xy 0 0)
     (princ "Ronda: ") (princ ronda) (princ " | Torn: ") (princ torn)
     (princ " | P-E1: ") (princ p1) (princ " | P-E2: ") (princ p2)
+    (princ "                    ")
     (terpri)
     (princ "E1-Bolas: ") (princ bolas-e1) (princ " | E2-Bolas: ") (princ bolas-e2)
     (princ " | E1-Labs: ") (princ labs-e1) (princ " | E2-Labs: ") (princ labs-e2)
+    (princ "                    ")
+          (terpri)
     t))
 
 (defun pinta (estat)
