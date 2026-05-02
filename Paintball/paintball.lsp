@@ -355,21 +355,26 @@
   ; bases: baixar temps rec
   ; bolles: baixar temps rec i temps pintar
 (defun baixar-cooldowns (estat)
-  "Aplica -1 als temps de recuperació de les unitats."
+  "Aplica -1 als temps de recuperació només de les unitats de l'equip actiu."
   (let* (
+         (torn (cadr (assoc 'torn estat)))
          (unitats (cadr (assoc 'unitats estat)))
-         (unitats2 (baixar-cooldowns-llista unitats))
+         (unitats2 (baixar-cooldowns-llista unitats torn))
         )
     (substituir-camp 'unitats unitats2 estat)))
 
-(defun baixar-cooldowns-llista (unitats)
+(defun baixar-cooldowns-llista (unitats equip)
   (cond
     ((null unitats) nil)
-
     (t
-     (cons
-      (baixar-cooldown-unitat (car unitats))
-      (baixar-cooldowns-llista (cdr unitats))))))
+     (let ((u (car unitats)))
+       (cond
+         ((eq (nth 3 u) equip)
+          (cons (baixar-cooldown-unitat u)
+                (baixar-cooldowns-llista (cdr unitats) equip)))
+         (t
+          (cons u
+                (baixar-cooldowns-llista (cdr unitats) equip))))))))
 
 (defun baixar-cooldown-unitat (u)
   (let (
