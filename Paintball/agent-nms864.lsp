@@ -5,380 +5,294 @@
 ;; Estudiants:
 ;;   - Marín Sánchez, Carolina
 ;;   - Mehannek Samah, Nour Iman
-;; Data: 2026
+;; Data: 03/05/2026
 ;; Assignatura: Llenguatges de Programació
 ;; Grup: 101
-;; Professors:
-;;   - Cabot Nadal, Miquel Àngel
-;;   - Oliver Tomàs, Antoni
-;; Lliurament: primera convocatòria.
 ;; ============================================================
-;; Agent Intel·ligent OFENSIU per E2
-;; Estratègia: Atacar la base enemiga, crear bolles dels tres colors,
-;;             capturar laboratoris, destruir unitats enemigues.
-;;   - La base crea bolles rotant els tres colors (r, g, b) per torn.
-;;   - Les bolles prioritzen pintar la base enemiga, després bolles i labs.
-;;   - Si no veuen objectiu, exploren el mapa sistemàticament.
-;;   - Usen la memòria compartida per recordar la posició de la base enemiga.
-;; ============================================================
-
-;; ============================================================
-;; ACCESSORS DE LES DADES DE LA UNITAT
+;; Estratègia E2 - atac + labs, sense defensa
+;;
+;; ROLS per (mod id 5):
+;;   0,1,2 → ATACANT : va directe a la base enemiga
+;;   3,4   → LAB     : captura laboratoris (i ataca de pas)
+;;
+;; Igual de agressiu que E1 però sense defensors:
+;; compensa amb triangulació de la base enemiga i
+;; bolles lab que també ataquen si veuen la base.
+;; Memòria: base-enemiga, base-enemiga-2.
 ;; ============================================================
 
-(defun agent-nms864-ronda      (d) (nth 0 d))
-(defun agent-nms864-equip      (d) (nth 1 d))
-(defun agent-nms864-pintura    (d) (nth 2 d))
-(defun agent-nms864-id         (d) (nth 3 d))
-(defun agent-nms864-tipus      (d) (nth 4 d))
-(defun agent-nms864-coord      (d) (nth 5 d))
-(defun agent-nms864-colors     (d) (nth 6 d))
-(defun agent-nms864-color-propi(d) (nth 7 d))
-(defun agent-nms864-tr-pintar  (d) (nth 8 d))
-(defun agent-nms864-tr-moure   (d) (nth 9 d))
-(defun agent-nms864-visio      (d) (nth 10 d))
-(defun agent-nms864-memoria    (d) (nth 11 d))
+(defun agent-nms864-ronda     (d) (nth 0 d))
+(defun agent-nms864-equip     (d) (nth 1 d))
+(defun agent-nms864-pintura   (d) (nth 2 d))
+(defun agent-nms864-id        (d) (nth 3 d))
+(defun agent-nms864-tipus     (d) (nth 4 d))
+(defun agent-nms864-coord     (d) (nth 5 d))
+(defun agent-nms864-tr-pintar (d) (nth 8 d))
+(defun agent-nms864-tr-moure  (d) (nth 9 d))
+(defun agent-nms864-visio     (d) (nth 10 d))
+(defun agent-nms864-memoria   (d) (nth 11 d))
 
-;; ============================================================
-;; ACCESSORS D'UNA CASELLA DE LA VISIÓ
-;; Format: (coord tipus color elem equip colors-pintat color-propi tr-pintar tr-moure)
-;; ============================================================
-
-(defun agent-nms864-cas-coord        (c) (nth 0 c))
-(defun agent-nms864-cas-tipus        (c) (nth 1 c))
-(defun agent-nms864-cas-color        (c) (nth 2 c))
-(defun agent-nms864-cas-elem         (c) (nth 3 c))
-(defun agent-nms864-cas-equip        (c) (nth 4 c))
-(defun agent-nms864-cas-colors-pintat(c) (nth 5 c))
-(defun agent-nms864-cas-color-propi  (c) (nth 6 c))
-(defun agent-nms864-cas-tr-pintar    (c) (nth 7 c))
-(defun agent-nms864-cas-tr-moure     (c) (nth 8 c))
-
-;; ============================================================
-;; DISTÀNCIA I PREDICATS GEOMÈTRICS
-;; ============================================================
+(defun agent-nms864-cas-coord (c) (nth 0 c))
+(defun agent-nms864-cas-tipus (c) (nth 1 c))
+(defun agent-nms864-cas-elem  (c) (nth 3 c))
+(defun agent-nms864-cas-equip (c) (nth 4 c))
 
 (defun agent-nms864-dist2 (a b)
-  "Retorna la distància euclidiana al quadrat entre a i b."
-  (let* ((dx (- (car a) (car b)))
-         (dy (- (cadr a) (cadr b))))
+  (let ((dx (- (car a) (car b))) (dy (- (cadr a) (cadr b))))
     (+ (* dx dx) (* dy dy))))
 
-(defun agent-nms864-terra-p (casella)
-  "Retorna T si la casella és de terra."
-  (eq (agent-nms864-cas-tipus casella) 'terra))
-
-(defun agent-nms864-lliure-p (casella)
-  "Retorna T si la casella és de terra i no té cap element."
-  (and (agent-nms864-terra-p casella)
-       (null (agent-nms864-cas-elem casella))))
-
-(defun agent-nms864-adjacent-p (coord casella)
-  "Retorna T si la casella és adjacent a coord (d²≤2, d²>0)."
-  (let ((d (agent-nms864-dist2 coord (agent-nms864-cas-coord casella))))
+(defun agent-nms864-terra-p (c) (eq (agent-nms864-cas-tipus c) 'terra))
+(defun agent-nms864-lliure-p (c)
+  (and (agent-nms864-terra-p c) (null (agent-nms864-cas-elem c))))
+(defun agent-nms864-adj-p (coord c)
+  (let ((d (agent-nms864-dist2 coord (agent-nms864-cas-coord c))))
     (and (> d 0) (<= d 2))))
-
-(defun agent-nms864-en-rang-pintar-p (coord casella)
-  "Retorna T si la casella és dins rang de pintura (d²≤5, d²>0)."
-  (let ((d (agent-nms864-dist2 coord (agent-nms864-cas-coord casella))))
+(defun agent-nms864-rang-p (coord c)
+  (let ((d (agent-nms864-dist2 coord (agent-nms864-cas-coord c))))
     (and (> d 0) (<= d 5))))
 
-;; ============================================================
-;; CERCA DE CASELLA LLIURE ADJACENT (per crear bolles)
-;; ============================================================
+(defun agent-nms864-llargada (l)
+  (cond ((null l) 0) (t (+ 1 (agent-nms864-llargada (cdr l))))))
 
-(defun agent-nms864-casella-lliure-adjacent (coord visio)
-  "Retorna la coordenada d'una casella adjacent de terra lliure, o nil."
-  (agent-nms864-casella-lliure-adjacent-rec coord visio))
+(defun agent-nms864-nth (n l)
+  (cond ((null l) nil) ((= n 0) (car l))
+        (t (agent-nms864-nth (- n 1) (cdr l)))))
 
-(defun agent-nms864-casella-lliure-adjacent-rec (coord visio)
-  "Recorre la visió cercant la primera casella adjacent lliure."
+;; ── Caselles adjacents lliures ─────────────────────────────
+
+(defun agent-nms864-adj-lliures (coord visio)
+  (agent-nms864-adj-rec coord visio nil))
+
+(defun agent-nms864-adj-rec (coord visio acc)
   (cond
-    ((null visio) nil)
-    ((and (agent-nms864-adjacent-p coord (car visio))
+    ((null visio) acc)
+    ((and (agent-nms864-adj-p coord (car visio))
           (agent-nms864-lliure-p (car visio)))
-     (agent-nms864-cas-coord (car visio)))
-    (t (agent-nms864-casella-lliure-adjacent-rec coord (cdr visio)))))
+     (agent-nms864-adj-rec coord (cdr visio)
+                            (cons (agent-nms864-cas-coord (car visio)) acc)))
+    (t (agent-nms864-adj-rec coord (cdr visio) acc))))
 
-;; ============================================================
-;; CERCA D'OBJECTIUS PER PINTAR
-;; ============================================================
+(defun agent-nms864-encaixonada-p (coord visio)
+  (<= (agent-nms864-llargada (agent-nms864-adj-lliures coord visio)) 2))
 
-(defun agent-nms864-objectiu-pintar (equip coord visio)
-  "Retorna la coord de l'objectiu prioritari de pintura (base > bolla > lab)."
-  (let ((base  (agent-nms864-cercar-base-enemiga-rang equip coord visio))
-        (bolla (agent-nms864-cercar-bolla-enemiga-rang equip coord visio))
-        (lab   (agent-nms864-cercar-lab-rang equip coord visio)))
-    (cond
-      (base  base)
-      (bolla bolla)
-      (lab   lab)
-      (t nil))))
+(defun agent-nms864-aleatoria (coord visio ronda id)
+  (let* ((cands (agent-nms864-adj-lliures coord visio))
+         (n     (agent-nms864-llargada cands)))
+    (cond ((= n 0) nil)
+          (t (agent-nms864-nth
+              (mod (abs (+ (* ronda 31) (* id 17)
+                           (* (car coord) 13) (* (cadr coord) 7)))
+                   n)
+              cands)))))
 
-(defun agent-nms864-cercar-base-enemiga-rang (equip coord visio)
-  "Retorna la coordenada de la base enemiga dins rang de pintura (d²≤5), o nil."
-  (cond
-    ((null visio) nil)
-    ((and (agent-nms864-en-rang-pintar-p coord (car visio))
-          (agent-nms864-terra-p (car visio))
-          (eq (agent-nms864-cas-elem (car visio)) 'base)
-          (not (eq (agent-nms864-cas-equip (car visio)) equip)))
-     (agent-nms864-cas-coord (car visio)))
-    (t (agent-nms864-cercar-base-enemiga-rang equip coord (cdr visio)))))
+;; ── Primera lliure per la base ──────────────────────────────
 
-(defun agent-nms864-cercar-bolla-enemiga-rang (equip coord visio)
-  "Retorna la coordenada de la bolla enemiga dins rang de pintura (d²≤5), o nil."
-  (cond
-    ((null visio) nil)
-    ((and (agent-nms864-en-rang-pintar-p coord (car visio))
-          (agent-nms864-terra-p (car visio))
-          (eq (agent-nms864-cas-elem (car visio)) 'bolla)
-          (not (eq (agent-nms864-cas-equip (car visio)) equip)))
-     (agent-nms864-cas-coord (car visio)))
-    (t (agent-nms864-cercar-bolla-enemiga-rang equip coord (cdr visio)))))
+(defun agent-nms864-primera-lliure (coord visio)
+  (cond ((null visio) nil)
+        ((and (agent-nms864-adj-p coord (car visio))
+              (agent-nms864-lliure-p (car visio)))
+         (agent-nms864-cas-coord (car visio)))
+        (t (agent-nms864-primera-lliure coord (cdr visio)))))
 
-(defun agent-nms864-cercar-lab-rang (equip coord visio)
-  "Retorna la coordenada del lab enemic o no capturat dins rang de pintura, o nil."
-  (cond
-    ((null visio) nil)
-    ((and (agent-nms864-en-rang-pintar-p coord (car visio))
-          (agent-nms864-terra-p (car visio))
-          (eq (agent-nms864-cas-elem (car visio)) 'lab)
-          (or (null (agent-nms864-cas-equip (car visio)))
-              (not (eq (agent-nms864-cas-equip (car visio)) equip))))
-     (agent-nms864-cas-coord (car visio)))
-    (t (agent-nms864-cercar-lab-rang equip coord (cdr visio)))))
+;; ── Navegació ───────────────────────────────────────────────
 
-;; ============================================================
-;; CERCA D'OBJECTIUS PER MOURE'S
-;; ============================================================
+(defun agent-nms864-cap-a (coord obj visio)
+  (agent-nms864-cap-a-rec coord obj visio nil 999999))
 
-(defun agent-nms864-objectiu-moure (equip coord visio ronda)
-  "Retorna la cel·la adjacent lliure destí de moviment, o nil si no n'hi ha."
-  (let ((obj          (agent-nms864-objectiu-estrategic equip coord visio))
-        (es-cantonada (< (length visio) 13)))
-    (cond
-      (es-cantonada
-       (agent-nms864-escapar-cantonada coord visio ronda))
-      (obj
-       (agent-nms864-cel·la-cap-a coord obj visio))
-      (t
-       (agent-nms864-cel·la-explorar coord visio)))))
-
-(defun agent-nms864-escapar-cantonada (coord visio ronda)
-  "Retorna una cel·la adjacent lliure per escapar d'una cantonada, amb variació per ronda."
-  (let* ((desfasament-aleatori (+ (car coord) (cadr coord) (* ronda 7)))
-         (angle-variat         (* desfasament-aleatori 0.157))
-         (objectiu-aleatori    (list (+ (car coord) (truncate (* 100 (cos angle-variat))))
-                                     (+ (cadr coord) (truncate (* 100 (sin angle-variat))))))
-         (casella-aleatoria    (agent-nms864-cel·la-cap-a-rec
-                                coord objectiu-aleatori visio nil 999999)))
-    (cond
-      (casella-aleatoria casella-aleatoria)
-      (t
-       (let* ((desfasament        (+ (car coord) (cadr coord)))
-              (angle              (* (+ ronda desfasament) 0.7853))
-              (objectiu-imaginari (list (+ (car coord) (truncate (* 100 (cos angle))))
-                                        (+ (cadr coord) (truncate (* 100 (sin angle))))))
-              (casella            (agent-nms864-cel·la-cap-a-rec
-                                   coord objectiu-imaginari visio nil 999999)))
-         (cond
-           (casella casella)
-           (t (agent-nms864-cel·la-explorar coord visio))))))))
-
-(defun agent-nms864-objectiu-estrategic (equip coord visio)
-  "Retorna la coord de l'objectiu estratègic visible (base enemiga o lab enemic)."
-  (let ((base (agent-nms864-cercar-base-enemiga-visio equip coord visio))
-        (lab  (agent-nms864-cercar-lab-enemic-visio equip coord visio)))
-    (cond
-      (base base)
-      (lab  lab)
-      (t nil))))
-
-(defun agent-nms864-cercar-base-enemiga-visio (equip coord visio)
-  "Retorna la coordenada de la base enemiga més propera dins la visió, o nil."
-  (agent-nms864-cercar-base-enemiga-visio-rec equip coord visio nil 999999))
-
-(defun agent-nms864-cercar-base-enemiga-visio-rec (equip coord visio millor millor-dist)
-  "Recorre la visió cercant la base enemiga de mínima distància."
+(defun agent-nms864-cap-a-rec (coord obj visio millor md)
   (cond
     ((null visio) millor)
-    ((and (agent-nms864-terra-p (car visio))
-          (eq (agent-nms864-cas-elem (car visio)) 'base)
-          (not (eq (agent-nms864-cas-equip (car visio)) equip)))
-     (let ((d (agent-nms864-dist2 coord (agent-nms864-cas-coord (car visio)))))
-       (cond
-         ((< d millor-dist)
-          (agent-nms864-cercar-base-enemiga-visio-rec equip coord (cdr visio)
-                                                      (agent-nms864-cas-coord (car visio)) d))
-         (t
-          (agent-nms864-cercar-base-enemiga-visio-rec equip coord (cdr visio)
-                                                      millor millor-dist)))))
-    (t (agent-nms864-cercar-base-enemiga-visio-rec equip coord (cdr visio)
-                                                   millor millor-dist))))
-
-(defun agent-nms864-cercar-lab-enemic-visio (equip coord visio)
-  "Retorna la coordenada del lab enemic o no capturat més proper dins la visió, o nil."
-  (agent-nms864-cercar-lab-enemic-visio-rec equip coord visio nil 999999))
-
-(defun agent-nms864-cercar-lab-enemic-visio-rec (equip coord visio millor millor-dist)
-  "Recorre la visió cercant el lab enemic o no capturat de mínima distància."
-  (cond
-    ((null visio) millor)
-    ((and (agent-nms864-terra-p (car visio))
-          (eq (agent-nms864-cas-elem (car visio)) 'lab)
-          (or (null (agent-nms864-cas-equip (car visio)))
-              (not (eq (agent-nms864-cas-equip (car visio)) equip))))
-     (let ((d (agent-nms864-dist2 coord (agent-nms864-cas-coord (car visio)))))
-       (cond
-         ((< d millor-dist)
-          (agent-nms864-cercar-lab-enemic-visio-rec equip coord (cdr visio)
-                                                    (agent-nms864-cas-coord (car visio)) d))
-         (t
-          (agent-nms864-cercar-lab-enemic-visio-rec equip coord (cdr visio)
-                                                    millor millor-dist)))))
-    (t (agent-nms864-cercar-lab-enemic-visio-rec equip coord (cdr visio)
-                                                 millor millor-dist))))
-
-;; ============================================================
-;; NAVEGACIÓ CAP A OBJECTIU I EXPLORACIÓ
-;; ============================================================
-
-(defun agent-nms864-cel·la-cap-a (coord objectiu visio)
-  "Retorna la cel·la adjacent lliure que minimitza la distància a objectiu."
-  (agent-nms864-cel·la-cap-a-rec coord objectiu visio nil 999999))
-
-(defun agent-nms864-cel·la-cap-a-rec (coord objectiu visio millor millor-dist)
-  "Recorre la visió cercant la cel·la adjacent lliure més propera a objectiu."
-  (cond
-    ((null visio) millor)
-    ((and (agent-nms864-adjacent-p coord (car visio))
+    ((and (agent-nms864-adj-p coord (car visio))
           (agent-nms864-lliure-p (car visio)))
-     (let ((d (agent-nms864-dist2 (agent-nms864-cas-coord (car visio)) objectiu)))
-       (cond
-         ((< d millor-dist)
-          (agent-nms864-cel·la-cap-a-rec coord objectiu (cdr visio)
+     (let ((d (agent-nms864-dist2 (agent-nms864-cas-coord (car visio)) obj)))
+       (cond ((< d md)
+              (agent-nms864-cap-a-rec coord obj (cdr visio)
+                                      (agent-nms864-cas-coord (car visio)) d))
+             (t (agent-nms864-cap-a-rec coord obj (cdr visio) millor md)))))
+    (t (agent-nms864-cap-a-rec coord obj (cdr visio) millor md))))
+
+(defun agent-nms864-moure (coord obj visio ronda id)
+  (let ((r (agent-nms864-cap-a coord obj visio)))
+    (cond (r r) (t (agent-nms864-aleatoria coord visio ronda id)))))
+
+;; ── Pintura en rang ─────────────────────────────────────────
+
+(defun agent-nms864-base-rang (equip coord visio)
+  (cond ((null visio) nil)
+        ((and (agent-nms864-rang-p coord (car visio))
+              (agent-nms864-terra-p (car visio))
+              (eq (agent-nms864-cas-elem (car visio)) 'base)
+              (not (eq (agent-nms864-cas-equip (car visio)) equip)))
+         (agent-nms864-cas-coord (car visio)))
+        (t (agent-nms864-base-rang equip coord (cdr visio)))))
+
+(defun agent-nms864-bolla-rang (equip coord visio)
+  (cond ((null visio) nil)
+        ((and (agent-nms864-rang-p coord (car visio))
+              (agent-nms864-terra-p (car visio))
+              (eq (agent-nms864-cas-elem (car visio)) 'bolla)
+              (not (eq (agent-nms864-cas-equip (car visio)) equip)))
+         (agent-nms864-cas-coord (car visio)))
+        (t (agent-nms864-bolla-rang equip coord (cdr visio)))))
+
+(defun agent-nms864-lab-rang (equip coord visio)
+  (cond ((null visio) nil)
+        ((and (agent-nms864-rang-p coord (car visio))
+              (agent-nms864-terra-p (car visio))
+              (eq (agent-nms864-cas-elem (car visio)) 'lab)
+              (not (eq (agent-nms864-cas-equip (car visio)) equip)))
+         (agent-nms864-cas-coord (car visio)))
+        (t (agent-nms864-lab-rang equip coord (cdr visio)))))
+
+;; ── Cerca a la visió ────────────────────────────────────────
+
+(defun agent-nms864-base-enemiga-vis (equip coord visio)
+  (agent-nms864-benv-rec equip coord visio nil 999999))
+
+(defun agent-nms864-benv-rec (equip coord visio millor md)
+  (cond ((null visio) millor)
+        ((and (agent-nms864-terra-p (car visio))
+              (eq (agent-nms864-cas-elem (car visio)) 'base)
+              (not (eq (agent-nms864-cas-equip (car visio)) equip)))
+         (let ((d (agent-nms864-dist2 coord (agent-nms864-cas-coord (car visio)))))
+           (cond ((< d md)
+                  (agent-nms864-benv-rec equip coord (cdr visio)
                                          (agent-nms864-cas-coord (car visio)) d))
-         (t
-          (agent-nms864-cel·la-cap-a-rec coord objectiu (cdr visio)
-                                         millor millor-dist)))))
-    (t (agent-nms864-cel·la-cap-a-rec coord objectiu (cdr visio) millor millor-dist))))
+                 (t (agent-nms864-benv-rec equip coord (cdr visio) millor md)))))
+        (t (agent-nms864-benv-rec equip coord (cdr visio) millor md))))
 
-(defun agent-nms864-cel·la-explorar (coord visio)
-  "Retorna la cel·la adjacent lliure més allunyada de coord per explorar el mapa."
-  (agent-nms864-cel·la-explorar-rec coord visio nil 0))
+(defun agent-nms864-lab-enemic-vis (equip coord visio)
+  (agent-nms864-lenv-rec equip coord visio nil 999999))
 
-(defun agent-nms864-cel·la-explorar-rec (coord visio millor millor-dist)
-  "Recorre la visió cercant la cel·la adjacent lliure de màxima distància."
-  (cond
-    ((null visio) millor)
-    ((and (agent-nms864-adjacent-p coord (car visio))
-          (agent-nms864-lliure-p (car visio)))
-     (let ((d (agent-nms864-dist2 coord (agent-nms864-cas-coord (car visio)))))
-       (cond
-         ((> d millor-dist)
-          (agent-nms864-cel·la-explorar-rec coord (cdr visio)
-                                            (agent-nms864-cas-coord (car visio)) d))
-         (t
-          (agent-nms864-cel·la-explorar-rec coord (cdr visio) millor millor-dist)))))
-    (t (agent-nms864-cel·la-explorar-rec coord (cdr visio) millor millor-dist))))
+(defun agent-nms864-lenv-rec (equip coord visio millor md)
+  (cond ((null visio) millor)
+        ((and (agent-nms864-terra-p (car visio))
+              (eq (agent-nms864-cas-elem (car visio)) 'lab)
+              (or (null (agent-nms864-cas-equip (car visio)))
+                  (not (eq (agent-nms864-cas-equip (car visio)) equip))))
+         (let ((d (agent-nms864-dist2 coord (agent-nms864-cas-coord (car visio)))))
+           (cond ((< d md)
+                  (agent-nms864-lenv-rec equip coord (cdr visio)
+                                         (agent-nms864-cas-coord (car visio)) d))
+                 (t (agent-nms864-lenv-rec equip coord (cdr visio) millor md)))))
+        (t (agent-nms864-lenv-rec equip coord (cdr visio) millor md))))
 
-;; ============================================================
-;; GESTIÓ DE LA MEMÒRIA COMPARTIDA
-;; ============================================================
+;; ── Actualitzar memòria ─────────────────────────────────────
 
-(defun agent-nms864-actualitzar-memoria (memoria coord visio ronda)
-  "Retorna la memòria actualitzada amb la posició de la base enemiga si és visible."
-  (let ((base-vista (agent-nms864-cercar-base-enemiga-visio-simple visio)))
+(defun agent-nms864-act-mem (memoria equip coord visio ronda)
+  "Actualitza la memòria: guarda base-enemiga amb triangulació.
+   Usa coord per trobar la base enemiga més propera, no (0 0)."
+  (let ((base-e (agent-nms864-base-enemiga-vis equip coord visio)))
+    (cond (base-e
+           (let* ((ant (mem-llegir memoria 'base-enemiga))
+                  (m1  (cond (ant (mem-escriure memoria 'base-enemiga-2 ant))
+                             (t memoria)))
+                  (m2  (mem-escriure m1 'base-enemiga base-e)))
+             (mem-escriure m2 'darrera-vista ronda)))
+          (t memoria))))
+
+;; ── Triangulació ────────────────────────────────────────────
+
+(defun agent-nms864-triangulat (memoria)
+  (let ((p1 (mem-llegir memoria 'base-enemiga))
+        (p2 (mem-llegir memoria 'base-enemiga-2)))
     (cond
-      (base-vista
-       (let* ((mem1 (mem-escriure memoria 'base-enemiga base-vista))
-              (mem2 (mem-escriure mem1 'darrera-vista ronda))
-              (mem3 (mem-escriure mem2 'posicio-propia coord)))
-         mem3))
-      ((and memoria (assoc 'base-enemiga memoria))
-       (mem-escriure memoria 'posicio-propia coord))
+      ((and p1 p2)
+       (list (truncate (/ (+ (car p1) (car p2)) 2))
+             (truncate (/ (+ (cadr p1) (cadr p2)) 2))))
+      (p1 p1)
       (t nil))))
 
-(defun agent-nms864-cercar-base-enemiga-visio-simple (visio)
-  "Retorna la coordenada de la primera base vista a la visió, o nil."
-  (cond
-    ((null visio) nil)
-    ((and (agent-nms864-terra-p (car visio))
-          (eq (agent-nms864-cas-elem (car visio)) 'base))
-     (agent-nms864-cas-coord (car visio)))
-    (t (agent-nms864-cercar-base-enemiga-visio-simple (cdr visio)))))
+;; ── ROL per id ──────────────────────────────────────────────
+;; mod 5: 0,1,2=atacant  3,4=lab
 
-(defun agent-nms864-objectiu-des-de-memoria (memoria coord visio)
-  "Retorna l'objectiu estratègic: base visible o posició guardada a la memòria."
-  (let ((base-visio (agent-nms864-cercar-base-enemiga-visio 'dummy coord visio)))
-    (cond
-      (base-visio base-visio)
-      ((mem-llegir memoria 'base-enemiga)
-       (mem-llegir memoria 'base-enemiga))
-      (t nil))))
+(defun agent-nms864-rol (id)
+  (let ((m (mod id 5)))
+    (cond ((or (= m 0) (= m 1) (= m 2)) 'atacant)
+          (t 'lab))))
 
-;; ============================================================
-;; COLOR PER RONDA
-;; ============================================================
+;; ── Zona d'exploració labs ──────────────────────────────────
+
+(defun agent-nms864-zona-lab (id ronda)
+  (let* ((f (mod (truncate (/ ronda 40)) 6))
+         (z (mod (+ (mod id 6) f) 6)))
+    (cond ((= z 0) '(10 10)) ((= z 1) '(50 10))
+          ((= z 2) '(10 50)) ((= z 3) '(50 50))
+          ((= z 4) '(30 10)) (t       '(10 30)))))
+
+;; ── Lògica ATACANT ──────────────────────────────────────────
+
+(defun agent-nms864-torn-atacant (equip coord visio ronda memoria id tr-p tr-m)
+  (let* ((base-vis (agent-nms864-base-enemiga-vis equip coord visio))
+         (base-mem (agent-nms864-triangulat memoria))
+         (obj      (cond (base-vis base-vis) (base-mem base-mem) (t '(30 30))))
+         (encaix   (agent-nms864-encaixonada-p coord visio))
+         (pint     (cond ((agent-nms864-base-rang equip coord visio))
+                         ((agent-nms864-bolla-rang equip coord visio))
+                         ((agent-nms864-lab-rang equip coord visio))
+                         (t nil)))
+         (mou      (cond (encaix (agent-nms864-aleatoria coord visio ronda id))
+                         (t (agent-nms864-moure coord obj visio ronda id))))
+         (ap       (cond ((and pint (< tr-p 1)) (list (list 'pinta (list pint)))) (t nil)))
+         (am       (cond ((and mou  (< tr-m 1)) (list (list 'mou   (list mou))))  (t nil))))
+    (append ap am)))
+
+;; ── Lògica LAB ──────────────────────────────────────────────
+
+(defun agent-nms864-torn-lab (equip coord visio ronda memoria id tr-p tr-m)
+  (let* ((lab-vis  (agent-nms864-lab-enemic-vis equip coord visio))
+         (base-vis (agent-nms864-base-enemiga-vis equip coord visio))
+         (base-mem (mem-llegir memoria 'base-enemiga))
+         (zona     (agent-nms864-zona-lab id ronda))
+         (desti    (cond (lab-vis lab-vis) (base-vis base-vis)
+                         (base-mem base-mem) (t zona)))
+         (encaix   (agent-nms864-encaixonada-p coord visio))
+         (pint     (cond ((agent-nms864-lab-rang equip coord visio))
+                         ((agent-nms864-base-rang equip coord visio))
+                         ((agent-nms864-bolla-rang equip coord visio))
+                         (t nil)))
+         (mou      (cond (encaix (agent-nms864-aleatoria coord visio ronda id))
+                         (t (agent-nms864-moure coord desti visio ronda id))))
+         (ap       (cond ((and pint (< tr-p 1)) (list (list 'pinta (list pint)))) (t nil)))
+         (am       (cond ((and mou  (< tr-m 1)) (list (list 'mou   (list mou))))  (t nil))))
+    (append ap am)))
+
+;; ── Color per ronda ─────────────────────────────────────────
 
 (defun agent-nms864-color-per-ronda (ronda)
-  "Retorna el color de bolla corresponent a la ronda (rotació r, g, b)."
-  (cond
-    ((= (mod ronda 3) 0) 'r)
-    ((= (mod ronda 3) 1) 'g)
-    (t 'b)))
+  (nth (mod ronda 3) '(r g b)))
 
-;; ============================================================
-;; FUNCIÓ PRINCIPAL DE L'AGENT
-;; ============================================================
+;; ── Funció principal ────────────────────────────────────────
 
 (defun agent-nms864 (dades)
-  "Agent ofensiu per E2. Crea bolles dels tres colors i ataca la base enemiga."
-  (let* ((ronda     (agent-nms864-ronda dades))
-         (equip     (agent-nms864-equip dades))
-         (pintura   (agent-nms864-pintura dades))
-         (tipus     (agent-nms864-tipus dades))
-         (coord     (agent-nms864-coord dades))
-         (tr-pintar (agent-nms864-tr-pintar dades))
-         (tr-moure  (agent-nms864-tr-moure dades))
-         (visio     (agent-nms864-visio dades)))
+  (let* ((ronda   (agent-nms864-ronda   dades))
+         (equip   (agent-nms864-equip   dades))
+         (pintura (agent-nms864-pintura dades))
+         (id      (agent-nms864-id      dades))
+         (tipus   (agent-nms864-tipus   dades))
+         (coord   (agent-nms864-coord   dades))
+         (tr-p    (agent-nms864-tr-pintar dades))
+         (tr-m    (agent-nms864-tr-moure  dades))
+         (visio   (agent-nms864-visio   dades))
+         (memoria (agent-nms864-memoria dades)))
     (cond
-      ;; BASE: crear bolla rotant colors, actualitzar memòria si cal
       ((eq tipus 'base)
-       (let* ((casella-lliure (agent-nms864-casella-lliure-adjacent coord visio))
-              (nova-memoria   (agent-nms864-actualitzar-memoria
-                               (agent-nms864-memoria dades) coord visio ronda)))
+       (let* ((cell   (agent-nms864-primera-lliure coord visio))
+              (mem-n  (agent-nms864-act-mem memoria equip coord visio ronda))
+              (acc-m  (list 'escriu-memoria (list mem-n))))
          (cond
-           ((and casella-lliure (>= pintura 50))
-            (let ((accions (list (list 'crea-bolla
-                                       (list (agent-nms864-color-per-ronda ronda)
-                                             casella-lliure)))))
-              (cond
-                (nova-memoria
-                 (append accions (list (list 'escriu-memoria (list nova-memoria)))))
-                (t accions))))
-           (t
-            (cond
-              (nova-memoria (list (list 'escriu-memoria (list nova-memoria))))
-              (t nil))))))
-      ;; BOLLA: pintar objectiu, moure's cap a objectiu, actualitzar memòria
+           ((and cell (>= pintura 50))
+            (list (list 'crea-bolla (list (agent-nms864-color-per-ronda ronda) cell))
+                  acc-m))
+           (t (list acc-m)))))
       ((eq tipus 'bolla)
-       (let* ((obj-pintar   (agent-nms864-objectiu-pintar equip coord visio))
-              (obj-moure    (agent-nms864-objectiu-moure equip coord visio ronda))
-              (nova-memoria (agent-nms864-actualitzar-memoria
-                             (agent-nms864-memoria dades) coord visio ronda))
-              (accio-pintar (cond
-                              ((and obj-pintar (< tr-pintar 1))
-                               (list (list 'pinta (list obj-pintar))))
-                              (t nil)))
-              (accio-moure  (cond
-                              ((and obj-moure (< tr-moure 1))
-                               (list (list 'mou (list obj-moure))))
-                              (t nil)))
-              (accio-memoria (cond
-                               (nova-memoria
-                                (list (list 'escriu-memoria (list nova-memoria))))
-                               (t nil))))
-         (append accio-pintar accio-moure accio-memoria)))
+       (let* ((mem-n  (agent-nms864-act-mem memoria equip coord visio ronda))
+              (rol    (agent-nms864-rol id))
+              (acrol  (cond
+                        ((eq rol 'atacant)
+                         (agent-nms864-torn-atacant equip coord visio ronda mem-n id tr-p tr-m))
+                        (t
+                         (agent-nms864-torn-lab equip coord visio ronda mem-n id tr-p tr-m))))
+              (acc-m  (list (list 'escriu-memoria (list mem-n)))))
+         (append acrol acc-m)))
       (t nil))))

@@ -5,328 +5,338 @@
 ;; Estudiants:
 ;;   - Marín Sánchez, Carolina
 ;;   - Mehannek Samah, Nour Iman
-;; Data: 2026
+;; Data: 03/05/2026
 ;; Assignatura: Llenguatges de Programació
 ;; Grup: 101
-;; Professors:
-;;   - Cabot Nadal, Miquel Àngel
-;;   - Oliver Tomàs, Antoni
-;; Lliurament: primera convocatòria.
 ;; ============================================================
-;; Agent Intel·ligent DEFENSIU per E1
-;; Estratègia: Protegir la base, capturar labs, atacar la base enemiga.
-;;   - La base crea bolles rotant els tres colors (r, g, b).
-;;   - Les bolles prioritzen pintar la base enemiga, després bolles i labs.
-;;   - Si no veuen objectiu, exploren el mapa sistemàticament.
-;;   - Usen la memòria compartida per recordar la posició de la base enemiga.
-;; ============================================================
-
-;; ============================================================
-;; ACCESSORS DE LES DADES DE LA UNITAT
+;; Estratègia E1 - atac + defensa lleugera
+;;
+;; ROLS per (mod id 5):
+;;   0,1,2 → ATACANT  : va directe a la base enemiga amb 3 colors
+;;   3     → DEFENSOR : patrulla prop de la base pròpia
+;;   4     → LAB      : captura laboratoris
+;;
+;; Clau: els atacants PRIORITZEN pintar la base enemiga amb
+;; els 3 colors necessaris per destruir-la. La base crea bolles
+;; ràpidament per tenir massa crítica.
+;; Memòria: base-enemiga, base-propia.
 ;; ============================================================
 
-(defun agent-cms213-ronda      (d) (nth 0 d))
-(defun agent-cms213-equip      (d) (nth 1 d))
-(defun agent-cms213-pintura    (d) (nth 2 d))
-(defun agent-cms213-id         (d) (nth 3 d))
-(defun agent-cms213-tipus      (d) (nth 4 d))
-(defun agent-cms213-coord      (d) (nth 5 d))
-(defun agent-cms213-colors     (d) (nth 6 d))
-(defun agent-cms213-color-propi(d) (nth 7 d))
-(defun agent-cms213-tr-pintar  (d) (nth 8 d))
-(defun agent-cms213-tr-moure   (d) (nth 9 d))
-(defun agent-cms213-visio      (d) (nth 10 d))
-(defun agent-cms213-memoria    (d) (nth 11 d))
-
-;; ============================================================
-;; DISTÀNCIA I PREDICATS GEOMÈTRICS
-;; ============================================================
+(defun agent-cms213-ronda     (d) (nth 0 d))
+(defun agent-cms213-equip     (d) (nth 1 d))
+(defun agent-cms213-pintura   (d) (nth 2 d))
+(defun agent-cms213-id        (d) (nth 3 d))
+(defun agent-cms213-tipus     (d) (nth 4 d))
+(defun agent-cms213-coord     (d) (nth 5 d))
+(defun agent-cms213-tr-pintar (d) (nth 8 d))
+(defun agent-cms213-tr-moure  (d) (nth 9 d))
+(defun agent-cms213-visio     (d) (nth 10 d))
+(defun agent-cms213-memoria   (d) (nth 11 d))
 
 (defun agent-cms213-dist2 (a b)
-  "Retorna la distància euclidiana al quadrat entre a i b."
-  (let ((dx (- (car a) (car b)))
-        (dy (- (cadr a) (cadr b))))
+  (let ((dx (- (car a) (car b))) (dy (- (cadr a) (cadr b))))
     (+ (* dx dx) (* dy dy))))
 
-;; ============================================================
-;; CERCA DE CASELLES LLIURES ADJACENTS
-;; ============================================================
+(defun agent-cms213-lliure-p (c)
+  (and (eq (nth 1 c) 'terra) (null (nth 3 c))))
 
-(defun agent-cms213-primera-casella-lliure (coord visio)
-  "Retorna la casella adjacent lliure més allunyada de coord per evitar aglomeracions."
-  (agent-cms213-primera-casella-lliure-rec coord visio nil -1))
+(defun agent-cms213-terra-p (c) (eq (nth 1 c) 'terra))
 
-(defun agent-cms213-primera-casella-lliure-rec (coord visio millor millor-dist)
-  "Recorre la visió cercant la casella adjacent lliure amb major distància a coord."
+(defun agent-cms213-llargada (l)
+  (cond ((null l) 0) (t (+ 1 (agent-cms213-llargada (cdr l))))))
+
+(defun agent-cms213-nth (n l)
+  (cond ((null l) nil) ((= n 0) (car l))
+        (t (agent-cms213-nth (- n 1) (cdr l)))))
+
+;; ── Caselles adjacents lliures ─────────────────────────────
+
+(defun agent-cms213-adj-lliures (coord visio)
+  (agent-cms213-adj-rec coord visio nil))
+
+(defun agent-cms213-adj-rec (coord visio acc)
+  (cond
+    ((null visio) acc)
+    ((and (agent-cms213-lliure-p (car visio))
+          (let ((d (agent-cms213-dist2 coord (nth 0 (car visio)))))
+            (and (> d 0) (<= d 2))))
+     (agent-cms213-adj-rec coord (cdr visio) (cons (nth 0 (car visio)) acc)))
+    (t (agent-cms213-adj-rec coord (cdr visio) acc))))
+
+(defun agent-cms213-encaixonada-p (coord visio)
+  (<= (agent-cms213-llargada (agent-cms213-adj-lliures coord visio)) 2))
+
+(defun agent-cms213-aleatoria (coord visio ronda id)
+  (let* ((cands (agent-cms213-adj-lliures coord visio))
+         (n     (agent-cms213-llargada cands)))
+    (cond ((= n 0) nil)
+          (t (agent-cms213-nth
+              (mod (abs (+ (* ronda 31) (* id 17)
+                           (* (car coord) 13) (* (cadr coord) 7)))
+                   n)
+              cands)))))
+
+;; ── Casella per crear bolles ────────────────────────────────
+
+(defun agent-cms213-primera-lliure (coord visio)
+  (agent-cms213-primera-rec coord visio nil -1))
+
+(defun agent-cms213-primera-rec (coord visio millor md)
   (cond
     ((null visio) millor)
-    ((and (> (agent-cms213-dist2 coord (nth 0 (car visio))) 0)
-          (<= (agent-cms213-dist2 coord (nth 0 (car visio))) 2)
-          (null (nth 3 (car visio)))
-          (> (agent-cms213-dist2 coord (nth 0 (car visio))) millor-dist))
-     (agent-cms213-primera-casella-lliure-rec coord (cdr visio)
-                                               (nth 0 (car visio))
-                                               (agent-cms213-dist2 coord (nth 0 (car visio)))))
-    (t (agent-cms213-primera-casella-lliure-rec coord (cdr visio) millor millor-dist))))
+    ((and (agent-cms213-lliure-p (car visio))
+          (let ((d (agent-cms213-dist2 coord (nth 0 (car visio)))))
+            (and (> d 0) (<= d 2) (> d md))))
+     (agent-cms213-primera-rec coord (cdr visio) (nth 0 (car visio))
+                                (agent-cms213-dist2 coord (nth 0 (car visio)))))
+    (t (agent-cms213-primera-rec coord (cdr visio) millor md))))
 
-;; ============================================================
-;; CERCA D'OBJECTIUS PER PINTAR
-;; ============================================================
+(defun agent-cms213-primera-excl (coord visio excl)
+  (agent-cms213-primera-excl-rec coord visio excl nil -1))
 
-(defun agent-cms213-primer-objectiu-pintura (equip coord visio)
-  "Retorna la coordenada de l'objectiu prioritari per pintar (base > bolla > lab)."
-  (let ((base (agent-cms213-cercar-base-en-rang equip coord visio)))
-    (cond
-      (base base)
-      (t (agent-cms213-primer-objectiu-pintura-rec equip coord visio)))))
-
-(defun agent-cms213-cercar-base-en-rang (equip coord visio)
-  "Retorna la coordenada de la base enemiga dins rang de pintura (d²≤5), o nil."
-  (cond
-    ((null visio) nil)
-    ((and (<= (agent-cms213-dist2 coord (nth 0 (car visio))) 5)
-          (> (agent-cms213-dist2 coord (nth 0 (car visio))) 0)
-          (eq (nth 3 (car visio)) 'base)
-          (not (eq (nth 4 (car visio)) equip)))
-     (nth 0 (car visio)))
-    (t (agent-cms213-cercar-base-en-rang equip coord (cdr visio)))))
-
-(defun agent-cms213-primer-objectiu-pintura-rec (equip coord visio)
-  "Retorna la coordenada de la bolla o lab enemic més proper dins rang de pintura."
-  (cond
-    ((null visio) nil)
-    ((and (<= (agent-cms213-dist2 coord (nth 0 (car visio))) 5)
-          (> (agent-cms213-dist2 coord (nth 0 (car visio))) 0)
-          (eq (nth 1 (car visio)) 'terra)
-          (eq (nth 3 (car visio)) 'bolla)
-          (not (eq (nth 4 (car visio)) equip)))
-     (nth 0 (car visio)))
-    ((and (<= (agent-cms213-dist2 coord (nth 0 (car visio))) 5)
-          (> (agent-cms213-dist2 coord (nth 0 (car visio))) 0)
-          (eq (nth 1 (car visio)) 'terra)
-          (eq (nth 3 (car visio)) 'lab)
-          (or (null (nth 4 (car visio)))
-              (not (eq (nth 4 (car visio)) equip))))
-     (nth 0 (car visio)))
-    (t (agent-cms213-primer-objectiu-pintura-rec equip coord (cdr visio)))))
-
-;; ============================================================
-;; CERCA D'OBJECTIUS PER MOURE'S
-;; ============================================================
-
-(defun agent-cms213-primer-objectiu-moviment (equip coord visio ronda memoria)
-  "Retorna la coordenada destí de moviment cap a l'objectiu estratègic o d'exploració."
-  (let ((base-visible (agent-cms213-objectiu-des-de-memoria memoria coord visio)))
-    (cond
-      (base-visible
-       (agent-cms213-casella-cap-a-objectiu coord base-visible visio))
-      (t
-       (agent-cms213-explorar-zona-cerca coord visio ronda)))))
-
-(defun agent-cms213-objectiu-des-de-memoria (memoria coord visio)
-  "Retorna l'objectiu estratègic: base visible o posició guardada a la memòria."
-  (let ((base-visio (agent-cms213-trobar-objectiu-estrategic 'e1 coord visio)))
-    (cond
-      (base-visio base-visio)
-      ((mem-llegir memoria 'base-enemiga)
-       (mem-llegir memoria 'base-enemiga))
-      (t nil))))
-
-(defun agent-cms213-trobar-objectiu-estrategic (equip coord visio)
-  "Retorna la coordenada de la base enemiga més propera dins la visió."
-  (agent-cms213-cercar-base-enemiga-rec equip coord visio nil 100000))
-
-(defun agent-cms213-cercar-base-enemiga-rec (equip coord visio millor millor-dist)
-  "Recorre la visió cercant la base enemiga de mínima distància."
+(defun agent-cms213-primera-excl-rec (coord visio excl millor md)
   (cond
     ((null visio) millor)
-    ((and (eq (nth 1 (car visio)) 'terra)
-          (eq (nth 3 (car visio)) 'base)
-          (not (eq (nth 4 (car visio)) equip)))
-     (let ((dist (agent-cms213-dist2 coord (nth 0 (car visio)))))
-       (cond
-         ((< dist millor-dist)
-          (agent-cms213-cercar-base-enemiga-rec equip coord (cdr visio)
-                                                (nth 0 (car visio)) dist))
-         (t
-          (agent-cms213-cercar-base-enemiga-rec equip coord (cdr visio)
-                                                millor millor-dist)))))
-    (t (agent-cms213-cercar-base-enemiga-rec equip coord (cdr visio) millor millor-dist))))
+    ((and (agent-cms213-lliure-p (car visio))
+          (not (equal (nth 0 (car visio)) excl))
+          (let ((d (agent-cms213-dist2 coord (nth 0 (car visio)))))
+            (and (> d 0) (<= d 2) (> d md))))
+     (agent-cms213-primera-excl-rec coord (cdr visio) excl (nth 0 (car visio))
+                                     (agent-cms213-dist2 coord (nth 0 (car visio)))))
+    (t (agent-cms213-primera-excl-rec coord (cdr visio) excl millor md))))
 
-;; ============================================================
-;; EXPLORACIÓ DEL MAPA
-;; ============================================================
+;; ── Navegació ───────────────────────────────────────────────
 
-(defun agent-cms213-explorar-zona-cerca (coord visio ronda)
-  "Retorna la cel·la de moviment per explorar: escapa de cantonades o cerca la més llunyana."
-  (let ((es-cantonada (agent-cms213-detectar-cantonada coord visio)))
-    (cond
-      (es-cantonada
-       (agent-cms213-escapar-cantonada coord visio ronda))
-      (t
-       (agent-cms213-cercar-casella-maxima-distancia coord visio nil 0)))))
+(defun agent-cms213-cap-a (coord obj visio)
+  (agent-cms213-cap-a-rec coord obj visio nil 999999))
 
-(defun agent-cms213-detectar-cantonada (coord visio)
-  "Retorna T si la unitat sembla estar en una cantonada del mapa (poca visió)."
-  (< (agent-cms213-comptar-caselles visio) 13))
-
-(defun agent-cms213-comptar-caselles (visio)
-  "Compta el nombre de caselles a la llista de visió."
-  (cond
-    ((null visio) 0)
-    (t (+ 1 (agent-cms213-comptar-caselles (cdr visio))))))
-
-(defun agent-cms213-escapar-cantonada (coord visio ronda)
-  "Retorna una cel·la adjacent lliure per escapar d'una cantonada, usant variació per ronda."
-  (let* ((desfasament-aleatori (+ (car coord) (cadr coord) (* ronda 7)))
-         (angle-variat         (* desfasament-aleatori 0.3141592))
-         (objectiu-aleatori    (list (+ (car coord) (truncate (* 100 (cos angle-variat))))
-                                     (+ (cadr coord) (truncate (* 100 (sin angle-variat))))))
-         (casella-aleatoria    (agent-cms213-casella-cap-a-objectiu-rec
-                                coord objectiu-aleatori visio nil 1000000)))
-    (cond
-      (casella-aleatoria casella-aleatoria)
-      (t
-       (let* ((desfasament       (+ (car coord) (cadr coord)))
-              (angle             (* (+ ronda desfasament) 0.7853))
-              (objectiu-imaginari (list (+ (car coord) (truncate (* 100 (cos angle))))
-                                        (+ (cadr coord) (truncate (* 100 (sin angle))))))
-              (casella           (agent-cms213-casella-cap-a-objectiu-rec
-                                  coord objectiu-imaginari visio nil 1000000)))
-         (cond
-           (casella casella)
-           (t (agent-cms213-cercar-casella-maxima-distancia coord visio nil 0))))))))
-
-(defun agent-cms213-cercar-casella-maxima-distancia (coord visio millor millor-dist)
-  "Retorna la cel·la adjacent lliure de major distància a coord per explorar."
+(defun agent-cms213-cap-a-rec (coord obj visio millor md)
   (cond
     ((null visio) millor)
-    ((and (agent-cms213-casella-lliure-p 'dummy (car visio))
-          (<= (agent-cms213-dist2 coord (nth 0 (car visio))) 2))
-     (let ((dist (agent-cms213-dist2 coord (nth 0 (car visio)))))
-       (cond
-         ((> dist millor-dist)
-          (agent-cms213-cercar-casella-maxima-distancia coord (cdr visio)
-                                                        (nth 0 (car visio)) dist))
-         (t
-          (agent-cms213-cercar-casella-maxima-distancia coord (cdr visio)
-                                                        millor millor-dist)))))
-    (t (agent-cms213-cercar-casella-maxima-distancia coord (cdr visio) millor millor-dist))))
+    ((and (agent-cms213-lliure-p (car visio))
+          (let ((d (agent-cms213-dist2 coord (nth 0 (car visio)))))
+            (and (> d 0) (<= d 2))))
+     (let ((d (agent-cms213-dist2 (nth 0 (car visio)) obj)))
+       (cond ((< d md)
+              (agent-cms213-cap-a-rec coord obj (cdr visio) (nth 0 (car visio)) d))
+             (t (agent-cms213-cap-a-rec coord obj (cdr visio) millor md)))))
+    (t (agent-cms213-cap-a-rec coord obj (cdr visio) millor md))))
 
-;; ============================================================
-;; NAVEGACIÓ CAP A OBJECTIU
-;; ============================================================
+(defun agent-cms213-moure (coord obj visio ronda id)
+  (let ((r (agent-cms213-cap-a coord obj visio)))
+    (cond (r r) (t (agent-cms213-aleatoria coord visio ronda id)))))
 
-(defun agent-cms213-casella-cap-a-objectiu (coord-bolla coord-objectiu visio)
-  "Retorna la cel·la adjacent lliure que minimitza la distància a coord-objectiu."
-  (let ((casella-propera (agent-cms213-casella-cap-a-objectiu-rec
-                          coord-bolla coord-objectiu visio nil 100000)))
-    (cond
-      (casella-propera casella-propera)
-      (t (agent-cms213-cercar-casella-maxima-distancia coord-bolla visio nil 0)))))
+;; ── Pintura en rang ─────────────────────────────────────────
 
-(defun agent-cms213-casella-cap-a-objectiu-rec (coord-bolla coord-objectiu visio millor millor-dist)
-  "Recorre la visió cercant la cel·la adjacent lliure més propera a coord-objectiu."
+(defun agent-cms213-base-rang (equip coord visio)
+  (cond ((null visio) nil)
+        ((and (let ((d (agent-cms213-dist2 coord (nth 0 (car visio)))))
+                (and (> d 0) (<= d 5)))
+              (eq (nth 3 (car visio)) 'base)
+              (not (eq (nth 4 (car visio)) equip)))
+         (nth 0 (car visio)))
+        (t (agent-cms213-base-rang equip coord (cdr visio)))))
+
+(defun agent-cms213-lab-rang (equip coord visio)
+  (cond ((null visio) nil)
+        ((and (agent-cms213-terra-p (car visio))
+              (let ((d (agent-cms213-dist2 coord (nth 0 (car visio)))))
+                (and (> d 0) (<= d 5)))
+              (eq (nth 3 (car visio)) 'lab)
+              (or (null (nth 4 (car visio)))
+                  (not (eq (nth 4 (car visio)) equip))))
+         (nth 0 (car visio)))
+        (t (agent-cms213-lab-rang equip coord (cdr visio)))))
+
+(defun agent-cms213-bolla-rang (equip coord visio)
+  (cond ((null visio) nil)
+        ((and (agent-cms213-terra-p (car visio))
+              (let ((d (agent-cms213-dist2 coord (nth 0 (car visio)))))
+                (and (> d 0) (<= d 5)))
+              (eq (nth 3 (car visio)) 'bolla)
+              (not (eq (nth 4 (car visio)) equip)))
+         (nth 0 (car visio)))
+        (t (agent-cms213-bolla-rang equip coord (cdr visio)))))
+
+;; ── Cerca a la visió ────────────────────────────────────────
+
+(defun agent-cms213-base-enemiga-vis (equip coord visio)
+  (agent-cms213-benv-rec equip coord visio nil 999999))
+
+(defun agent-cms213-benv-rec (equip coord visio millor md)
+  (cond ((null visio) millor)
+        ((and (agent-cms213-terra-p (car visio))
+              (eq (nth 3 (car visio)) 'base)
+              (not (eq (nth 4 (car visio)) equip)))
+         (let ((d (agent-cms213-dist2 coord (nth 0 (car visio)))))
+           (cond ((< d md)
+                  (agent-cms213-benv-rec equip coord (cdr visio) (nth 0 (car visio)) d))
+                 (t (agent-cms213-benv-rec equip coord (cdr visio) millor md)))))
+        (t (agent-cms213-benv-rec equip coord (cdr visio) millor md))))
+
+(defun agent-cms213-lab-enemic-vis (equip coord visio)
+  (agent-cms213-lenv-rec equip coord visio nil 999999))
+
+(defun agent-cms213-lenv-rec (equip coord visio millor md)
+  (cond ((null visio) millor)
+        ((and (agent-cms213-terra-p (car visio))
+              (eq (nth 3 (car visio)) 'lab)
+              (or (null (nth 4 (car visio)))
+                  (not (eq (nth 4 (car visio)) equip))))
+         (let ((d (agent-cms213-dist2 coord (nth 0 (car visio)))))
+           (cond ((< d md)
+                  (agent-cms213-lenv-rec equip coord (cdr visio) (nth 0 (car visio)) d))
+                 (t (agent-cms213-lenv-rec equip coord (cdr visio) millor md)))))
+        (t (agent-cms213-lenv-rec equip coord (cdr visio) millor md))))
+
+(defun agent-cms213-base-propia-vis (equip visio)
+  (cond ((null visio) nil)
+        ((and (agent-cms213-terra-p (car visio))
+              (eq (nth 3 (car visio)) 'base)
+              (eq (nth 4 (car visio)) equip))
+         (nth 0 (car visio)))
+        (t (agent-cms213-base-propia-vis equip (cdr visio)))))
+
+;; ── Actualitzar memòria ─────────────────────────────────────
+
+(defun agent-cms213-act-mem (memoria equip coord visio ronda)
+  "Actualitza la memòria: guarda base-enemiga (si visible) i base-propia.
+   Usa coord per trobar la base enemiga més propera, no (0 0)."
+  (let* ((base-e (agent-cms213-base-enemiga-vis equip coord visio))
+         (base-p (agent-cms213-base-propia-vis equip visio))
+         (m1 (cond (base-e
+                    (let* ((m (mem-escriure memoria 'base-enemiga base-e)))
+                      (mem-escriure m 'darrera-vista ronda)))
+                   (t memoria)))
+         (m2 (cond (base-p (mem-escriure m1 'base-propia base-p))
+                   (t m1))))
+    m2))
+
+;; ── ROL per id ──────────────────────────────────────────────
+;; mod 5: 0,1,2=atacant  3=defensor  4=lab
+
+(defun agent-cms213-rol (id)
+  (let ((m (mod id 5)))
+    (cond ((or (= m 0) (= m 1) (= m 2)) 'atacant)
+          ((= m 3) 'defensor)
+          (t 'lab))))
+
+;; ── Zona de patrulla defensors ──────────────────────────────
+
+(defun agent-cms213-zona-defensa (id base ronda)
   (cond
-    ((null visio) millor)
-    ((and (agent-cms213-casella-lliure-p 'dummy (car visio))
-          (<= (agent-cms213-dist2 coord-bolla (nth 0 (car visio))) 2))
-     (let* ((coord-casella (nth 0 (car visio)))
-            (dist-nova     (agent-cms213-dist2 coord-casella coord-objectiu)))
-       (cond
-         ((< dist-nova millor-dist)
-          (agent-cms213-casella-cap-a-objectiu-rec coord-bolla coord-objectiu
-                                                    (cdr visio) coord-casella dist-nova))
-         (t
-          (agent-cms213-casella-cap-a-objectiu-rec coord-bolla coord-objectiu
-                                                    (cdr visio) millor millor-dist)))))
-    (t (agent-cms213-casella-cap-a-objectiu-rec coord-bolla coord-objectiu
-                                                 (cdr visio) millor millor-dist))))
+    (base
+     (let* ((s   (mod (+ id (mod (truncate (/ ronda 20)) 4)) 4))
+            (bx  (car base)) (by (cadr base)))
+       (cond ((= s 0) (list (+ bx 7) by))
+             ((= s 1) (list bx (+ by 7)))
+             ((= s 2) (list (- bx 7) by))
+             (t       (list bx (- by 7))))))
+    (t '(5 5))))
 
-;; ============================================================
-;; PREDICATS AUXILIARS
-;; ============================================================
+;; ── Zona d'exploració labs ──────────────────────────────────
 
-(defun agent-cms213-pintable-p (equip casella)
-  "Retorna T si la casella és de terra i pintable per equip."
-  (and (eq (nth 1 casella) 'terra)
-       (or (null (nth 3 casella))
-           (not (eq (nth 4 casella) equip)))))
+(defun agent-cms213-zona-lab (id ronda)
+  (let* ((f (mod (truncate (/ ronda 40)) 4))
+         (z (mod (+ (mod id 4) f) 4)))
+    (cond ((= z 0) '(12 12)) ((= z 1) '(48 12))
+          ((= z 2) '(12 48)) (t       '(48 48)))))
 
-(defun agent-cms213-casella-lliure-p (equip casella)
-  "Retorna T si la casella és de terra i no té cap element."
-  (and (eq (nth 1 casella) 'terra)
-       (null (nth 3 casella))))
+;; ── Lògica ATACANT ──────────────────────────────────────────
 
-;; ============================================================
-;; GESTIÓ DE LA MEMÒRIA COMPARTIDA
-;; ============================================================
+(defun agent-cms213-torn-atacant (equip coord visio ronda memoria id tr-p tr-m)
+  (let* ((base-vis (agent-cms213-base-enemiga-vis equip coord visio))
+         (base-mem (mem-llegir memoria 'base-enemiga))
+         (obj      (cond (base-vis base-vis) (base-mem base-mem) (t '(30 30))))
+         (encaix   (agent-cms213-encaixonada-p coord visio))
+         ;; Prioritat: base > bolla > lab (per destruir la base amb 3 colors)
+         (pint     (cond ((agent-cms213-base-rang equip coord visio))
+                         ((agent-cms213-bolla-rang equip coord visio))
+                         ((agent-cms213-lab-rang equip coord visio))
+                         (t nil)))
+         (mou      (cond (encaix (agent-cms213-aleatoria coord visio ronda id))
+                         (t (agent-cms213-moure coord obj visio ronda id))))
+         (ap       (cond ((and pint (< tr-p 1)) (list (list 'pinta (list pint)))) (t nil)))
+         (am       (cond ((and mou  (< tr-m 1)) (list (list 'mou   (list mou))))  (t nil))))
+    (append ap am)))
 
-(defun agent-cms213-actualitzar-memoria (memoria coord visio ronda)
-  "Retorna la memòria actualitzada amb la posició de la base enemiga si és visible."
-  (let ((base-enemiga (agent-cms213-trobar-base-enemiga-visio visio)))
-    (cond
-      (base-enemiga
-       (let* ((mem1 (mem-escriure memoria 'base-enemiga base-enemiga))
-              (mem2 (mem-escriure mem1 'darrera-vista ronda))
-              (mem3 (mem-escriure mem2 'posicio-propia coord)))
-         mem3))
-      ((mem-llegir memoria 'base-enemiga)
-       (mem-escriure memoria 'posicio-propia coord))
-      (t (mem-escriure memoria 'posicio-propia coord)))))
+;; ── Lògica DEFENSOR ─────────────────────────────────────────
 
-(defun agent-cms213-trobar-base-enemiga-visio (visio)
-  "Retorna la coordenada de la primera base vista a la visió, o nil."
-  (cond
-    ((null visio) nil)
-    ((and (eq (nth 1 (car visio)) 'terra)
-          (eq (nth 3 (car visio)) 'base))
-     (nth 0 (car visio)))
-    (t (agent-cms213-trobar-base-enemiga-visio (cdr visio)))))
+(defun agent-cms213-torn-defensor (equip coord visio ronda memoria id tr-p tr-m)
+  (let* ((base-p  (mem-llegir memoria 'base-propia))
+         (enemic  (agent-cms213-base-enemiga-vis equip coord visio))
+         (zona    (agent-cms213-zona-defensa id base-p ronda))
+         (encaix  (agent-cms213-encaixonada-p coord visio))
+         (pint    (cond ((agent-cms213-bolla-rang equip coord visio))
+                        ((agent-cms213-base-rang equip coord visio))
+                        ((agent-cms213-lab-rang equip coord visio))
+                        (t nil)))
+         (desti   (cond (enemic enemic) (t zona)))
+         (mou     (cond (encaix (agent-cms213-aleatoria coord visio ronda id))
+                        (t (agent-cms213-moure coord desti visio ronda id))))
+         (ap      (cond ((and pint (< tr-p 1)) (list (list 'pinta (list pint)))) (t nil)))
+         (am      (cond ((and mou  (< tr-m 1)) (list (list 'mou   (list mou))))  (t nil))))
+    (append ap am)))
 
-;; ============================================================
-;; FUNCIÓ PRINCIPAL DE L'AGENT
-;; ============================================================
+;; ── Lògica LAB ──────────────────────────────────────────────
+
+(defun agent-cms213-torn-lab (equip coord visio ronda memoria id tr-p tr-m)
+  (let* ((lab-vis (agent-cms213-lab-enemic-vis equip coord visio))
+         (base-vis (agent-cms213-base-enemiga-vis equip coord visio))
+         (base-mem (mem-llegir memoria 'base-enemiga))
+         (zona    (agent-cms213-zona-lab id ronda))
+         (desti   (cond (lab-vis lab-vis) (base-vis base-vis)
+                        (base-mem base-mem) (t zona)))
+         (encaix  (agent-cms213-encaixonada-p coord visio))
+         (pint    (cond ((agent-cms213-lab-rang equip coord visio))
+                        ((agent-cms213-base-rang equip coord visio))
+                        ((agent-cms213-bolla-rang equip coord visio))
+                        (t nil)))
+         (mou     (cond (encaix (agent-cms213-aleatoria coord visio ronda id))
+                        (t (agent-cms213-moure coord desti visio ronda id))))
+         (ap      (cond ((and pint (< tr-p 1)) (list (list 'pinta (list pint)))) (t nil)))
+         (am      (cond ((and mou  (< tr-m 1)) (list (list 'mou   (list mou))))  (t nil))))
+    (append ap am)))
+
+;; ── Funció principal ────────────────────────────────────────
 
 (defun agent-cms213 (dades)
-  "Agent defensiu per E1. Crea bolles de colors variats i ataca la base enemiga."
-  (let* ((equip          (nth 1 dades))
-         (pintura        (nth 2 dades))
-         (ronda          (nth 0 dades))
-         (tipus          (nth 4 dades))
-         (coord          (nth 5 dades))
-         (tr-pintar      (nth 8 dades))
-         (tr-moure       (nth 9 dades))
-         (visio          (nth 10 dades))
-         (memoria        (nth 11 dades))
-         (nova-memoria   (agent-cms213-actualitzar-memoria memoria coord visio ronda))
-         (obj-pintura    (agent-cms213-primer-objectiu-pintura equip coord visio))
-         (obj-moviment   (agent-cms213-primer-objectiu-moviment equip coord visio ronda memoria))
-         (casella-lliure (agent-cms213-primera-casella-lliure coord visio)))
+  (let* ((ronda   (agent-cms213-ronda   dades))
+         (equip   (agent-cms213-equip   dades))
+         (pintura (agent-cms213-pintura dades))
+         (id      (agent-cms213-id      dades))
+         (tipus   (agent-cms213-tipus   dades))
+         (coord   (agent-cms213-coord   dades))
+         (tr-p    (agent-cms213-tr-pintar dades))
+         (tr-m    (agent-cms213-tr-moure  dades))
+         (visio   (agent-cms213-visio   dades))
+         (memoria (agent-cms213-memoria dades)))
     (cond
-      ;; BASE: crear bolla rotant colors i actualitzar memòria
       ((eq tipus 'base)
-       (let ((color-elegit (nth (mod ronda 3) '(r g b))))
+       (let* ((color  (nth (mod ronda 3) '(r g b)))
+              (cell1  (agent-cms213-primera-lliure coord visio))
+              (cell2  (cond (cell1 (agent-cms213-primera-excl coord visio cell1)) (t nil)))
+              (mem-n  (agent-cms213-act-mem memoria equip coord visio ronda))
+              (mem-n2 (mem-escriure mem-n 'base-propia coord))
+              (acc-m  (list 'escriu-memoria (list mem-n2))))
          (cond
-           ((and (>= pintura 50) casella-lliure)
-            (list (list 'crea-bolla (list color-elegit casella-lliure))
-                  (list 'escriu-memoria (list nova-memoria))))
-           (t (list (list 'escriu-memoria (list nova-memoria)))))))
-      ;; BOLLA: pintar objectiu, moure's o actualitzar memòria
+           ((and (>= pintura 100) cell1 cell2)
+            (list (list 'crea-bolla (list color cell1))
+                  (list 'crea-bolla (list (nth (mod (+ ronda 1) 3) '(r g b)) cell2))
+                  acc-m))
+           ((and (>= pintura 50) cell1)
+            (list (list 'crea-bolla (list color cell1)) acc-m))
+           (t (list acc-m)))))
       ((eq tipus 'bolla)
-       (let ((accions-combat
-              (cond
-                ((and obj-pintura (< tr-pintar 1))
-                 (list (list 'pinta (list obj-pintura))))
-                ((and obj-moviment (< tr-moure 1))
-                 (list (list 'mou (list obj-moviment))))
-                (t nil))))
-         (let ((base-vista (agent-cms213-trobar-objectiu-estrategic equip coord visio)))
-           (cond
-             (base-vista
-              (append accions-combat
-                      (list (list 'escriu-memoria
-                                  (list (agent-cms213-actualitzar-memoria
-                                         memoria coord visio ronda))))))
-             (t accions-combat)))))
+       (let* ((mem-n  (agent-cms213-act-mem memoria equip coord visio ronda))
+              (rol    (agent-cms213-rol id))
+              (acrol  (cond
+                        ((eq rol 'atacant)
+                         (agent-cms213-torn-atacant equip coord visio ronda mem-n id tr-p tr-m))
+                        ((eq rol 'defensor)
+                         (agent-cms213-torn-defensor equip coord visio ronda mem-n id tr-p tr-m))
+                        (t
+                         (agent-cms213-torn-lab equip coord visio ronda mem-n id tr-p tr-m))))
+              (acc-m  (list (list 'escriu-memoria (list mem-n)))))
+         (append acrol acc-m)))
       (t nil))))

@@ -5,7 +5,7 @@
 ;; Estudiants:
 ;;   - Marín Sánchez, Carolina
 ;;   - Mehannek Samah, Nour Iman
-;; Data: 2026
+;; Data: 03/05/2026
 ;; Assignatura: Llenguatges de Programació
 ;; Grup: 101
 ;; Professors:
