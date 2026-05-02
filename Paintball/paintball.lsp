@@ -1283,35 +1283,40 @@
      (substituir-camp 'memoria-e2 nova-memoria estat))))
 
 (defun construir-visio-unitat (estat unitat)
-  "Construeix la visió de la unitat segons el seu tipus."
+  "Construeix la visió de la unitat iterant només les caselles dins del rang."
   (let* ((rango (cond ((eq (nth 2 unitat) 'base) 64) (t 20)))
          (coord-origen (nth 4 unitat))
          (mapa (cadr (assoc 'mapa estat)))
-         (unitats (cadr (assoc 'unitats estat))))
-    (construir-visio-unitat-rec mapa unitats coord-origen rango 0 0)))
+         (unitats (cadr (assoc 'unitats estat)))
+         (r (truncate (sqrt rango))))
+    (construir-visio-dx mapa unitats coord-origen rango r (- r) (- r))))
 
-(defun construir-visio-unitat-rec (mapa unitats coord-origen rango y x)
+(defun construir-visio-dx (mapa unitats coord-origen rango r dx dy)
+  "Itera dx de -r a r, dy de -r a r, i afegeix les caselles dins del rang."
   (cond
-    ((null mapa) nil)
+    ((> dx r) nil)
+    ((> dy r)
+     (construir-visio-dx mapa unitats coord-origen rango r (+ dx 1) (- r)))
     (t
-     (append
-      (construir-visio-fila (car mapa) unitats coord-origen rango y 0)
-      (construir-visio-unitat-rec (cdr mapa) unitats coord-origen rango (+ y 1) 0)))))
-
-(defun construir-visio-fila (fila unitats coord-origen rango y x)
-  (cond
-    ((null fila) nil)
-    (t
-     (let* ((coord (list x y))
-            (d2 (dist2 coord-origen coord))
-            (casella (car fila))
-            (unitat-casella (obtenir-unitat-per-coord unitats coord)))
+     (let* ((ox (car coord-origen))
+            (oy (cadr coord-origen))
+            (x (+ ox dx))
+            (y (+ oy dy))
+            (coord (list x y))
+            (d2 (+ (* dx dx) (* dy dy))))
        (cond
-         ((<= d2 rango)
-          (cons (construir-entrada-visio coord casella unitat-casella)
-                (construir-visio-fila (cdr fila) unitats coord-origen rango y (+ x 1))))
+         ((and (<= d2 rango)
+               (>= x 0)
+               (>= y 0)
+               (not (null (obtenir-casella-mapa mapa coord))))
+          (let* ((casella (obtenir-casella-mapa mapa coord))
+                 (unitat-casella (obtenir-unitat-per-coord unitats coord)))
+            (cons (construir-entrada-visio coord casella unitat-casella)
+                  (construir-visio-dx mapa unitats coord-origen rango r dx (+ dy 1)))))
          (t
-          (construir-visio-fila (cdr fila) unitats coord-origen rango y (+ x 1))))))))
+          (construir-visio-dx mapa unitats coord-origen rango r dx (+ dy 1))))))))
+
+
 
 (defun construir-entrada-visio (coord casella unitat-casella)
   ;; Si la casella es agua, retornar solo (coord 'aigua)
