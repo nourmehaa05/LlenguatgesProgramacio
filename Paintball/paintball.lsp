@@ -59,16 +59,17 @@
          (close fitxer)
          mapa)))))
 
-(defun inici-mapa (nom-mapa)
+(defun inici-mapa (nom-mapa pintar-cada-n)
   "Carrega el mapa pel nom i comença la partida."
   (color 0 0 0 255 255 255) ; Compatibilitat Windows-Unix: fons blanc, línies i text negres.
   (mode 0 0 640 375)        ; Compatibilitat Windows-Unix: configura la finestra de joc per a Unix segons la de Windows.
   (let* ((mapa (carrega-mapa nom-mapa))
          (estat (cond (mapa (crear-estat-inicial mapa)) (t nil))))
-    (cond (estat (jugar-partida-inicial estat)) (t nil))))
+    (cond (estat (jugar-partida-inicial estat pintar-cada-n)) (t nil))))
 
 (defun inici ()
-  (inici-mapa "tiny"))  ;; o el que vulguis per defecte
+  (inici-mapa "tiny" 1))    ;; mapa petit -> pinta cada torn
+                             ;; per un 60x60 fes (inici-mapa "gran" 10)
 
 
 ; ------------------------------------------------------------------
@@ -191,43 +192,43 @@
 
 ;; Aquest mètode es fa per no incrementar la pintura ni decrementar
 ;; els temps a la primera ronda.
-(defun jugar-partida-inicial (estat)
-  "Primera ronda de la partida."
-  (color 0 0 0 255 255 255)
+(defun jugar-partida-inicial (estat pintar-cada-n)
   (cls)
-
   (cond
-      ((final-partida-p estat)
-       (finalitzar-partida estat))
-      (t
-       (let* ((estat1 (executar-torn estat))
-              (estat2 (seguent-torn estat1)))
-         (pinta estat1)
-         (cond
-           ((final-partida-p estat2)
-            (finalitzar-partida estat2))
-           (t
-            (let* ((estat3 (executar-torn estat2))
-                   (estat4 (seguent-torn estat3)))
-              (pinta estat4)
-              (jugar-partida estat4))))))))
+    ((final-partida-p estat)
+     (finalitzar-partida estat))
+    (t
+     (let* ((estat1 (executar-torn estat))
+            (estat2 (seguent-torn estat1)))
+       (pinta estat1)
+       (cond
+         ((final-partida-p estat2)
+          (finalitzar-partida estat2))
+         (t
+          (let* ((estat3 (executar-torn estat2))
+                 (estat4 (seguent-torn estat3)))
+            (pinta estat4)
+            (jugar-partida estat4 pintar-cada-n))))))))
 
-(defun jugar-partida (estat)
+(defun jugar-partida (estat pintar-cada-n)
   "Bucle principal de la partida."
   (cond
     ((final-partida-p estat)
      (finalitzar-partida estat))
-
     (t
      (let* (
             (estat1 (actualitzar-pintura estat))
             (estat2 (baixar-cooldowns estat1))
             (estat3 (executar-torn estat2))
             (estat4 (seguent-torn estat3))
+            (ronda (cadr (assoc 'ronda estat4)))
            )
-      (sleep 0.05) ;; Pausa para controlar la velocidad del juego
-      (pinta estat4)
-       (jugar-partida estat4)))))
+       (cond
+         ((= (mod ronda pintar-cada-n) 0)
+          (sleep 0.05)
+          (pinta estat4))
+         (t nil))
+       (jugar-partida estat4 pintar-cada-n)))))
 
 
 
