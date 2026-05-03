@@ -492,7 +492,7 @@
          (diagonal (cond ((= d2 2) 1.4142) (t 1.0)))
          (penalitzacio (cond ((eq color-desti color-bolla) 1) (t 3)))
          (resultat (* diagonal penalitzacio)))
-    (truncate resultat)))
+    (floor resultat)))
 
 
 ;; ==============================================================
@@ -1236,7 +1236,7 @@
          (coord-origen (nth 4 unitat))
          (mapa (cadr (assoc 'mapa estat)))
          (unitats (cadr (assoc 'unitats estat)))
-         (r (truncate (sqrt rango))))
+         (r (floor (sqrt rango))))
     (construir-visio-dx mapa unitats coord-origen rango r (- r) (- r))))
 
 (defun construir-visio-dx (mapa unitats coord-origen rango r dx dy)
@@ -1246,7 +1246,7 @@
    unitats:     llista de totes les unitats del joc
    coord-origen: coordenada central de la visió
    rango:       rang màxim en distància al quadrat
-   r:           radi del quadrat de cerca (truncate(sqrt(rango)))
+   r:           radi del quadrat de cerca (floor(sqrt(rango)))
    dx:          desplaçament horitzontal actual
    dy:          desplaçament vertical actual"
   (cond

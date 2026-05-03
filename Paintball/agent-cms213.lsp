@@ -385,7 +385,7 @@
    ronda: número de ronda actual"
   (cond
     (base
-     (let* ((s   (mod (+ id (mod (truncate (/ ronda 20)) 4)) 4))
+     (let* ((s   (mod (+ id (mod (floor (/ ronda 20)) 4)) 4))
             (bx  (car base)) (by (cadr base)))
        (cond ((= s 0) (list (+ bx 7) by))
              ((= s 1) (list bx (+ by 7)))
@@ -397,7 +397,7 @@
   "Retorna la coordenada d'exploració de labs, rotant entre 4 zones del mapa.
    id:    identificador de la unitat
    ronda: número de ronda actual"
-  (let* ((f (mod (truncate (/ ronda 40)) 4))
+  (let* ((f (mod (floor (/ ronda 40)) 4))
          (z (mod (+ (mod id 4) f) 4)))
     (cond ((= z 0) '(12 12)) ((= z 1) '(48 12))
           ((= z 2) '(12 48)) (t       '(48 48)))))

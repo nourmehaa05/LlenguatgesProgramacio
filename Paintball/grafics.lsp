@@ -150,7 +150,7 @@
    radi:           radi del cercle en píxels
    desplacament-y: desplaçament vertical actual respecte al centre"
   (cond ((> desplacament-y radi) t)
-        (t (let* ((amplada  (truncate (sqrt (- (* radi radi)
+        (t (let* ((amplada  (floor (sqrt (- (* radi radi)
                                                (* desplacament-y desplacament-y)))))
                   (x-inici  (- cx amplada))
                   (y-actual (+ cy desplacament-y)))
@@ -208,7 +208,7 @@
              (cond
                ;; Base: quadrat interior del color de l'equip
                ((member 'base casella)
-                (let* ((marge    (truncate (* mida 0.2)))
+                (let* ((marge    (floor (* mida 0.2)))
                        (mida-int (- mida (* 2 marge)))
                        (color-eq (cond ((eq equip 'e1) 'lila) (t 'taronja))))
                   (aplica-color color-eq)
@@ -223,17 +223,17 @@
                        (cy (+ y-pos (/ mida 2)))
                        (r  (- (/ mida 2) 1)))
                   (aplica-color 'groc)
-                  (move (truncate (- cx r)) (truncate cy))
-                  (drawrel (truncate (* 2 r)) 0)
-                  (move (truncate cx) (truncate (- cy r)))
-                  (drawrel 0 (truncate (* 2 r)))))
+                  (move (floor (- cx r)) (floor cy))
+                  (drawrel (floor (* 2 r)) 0)
+                  (move (floor cx) (floor (- cy r)))
+                  (drawrel 0 (floor (* 2 r)))))
 
                ;; Bolla: cercle exterior (equip) + cercle interior (color propi)
                ((member 'bolla casella)
-                (let* ((cx          (truncate (+ x-pos (/ mida 2))))
-                       (cy          (truncate (+ y-pos (/ mida 2))))
-                       (r-equip     (truncate (* mida 0.4)))
-                       (r-centre    (truncate (* mida 0.2)))
+                (let* ((cx          (floor (+ x-pos (/ mida 2))))
+                       (cy          (floor (+ y-pos (/ mida 2))))
+                       (r-equip     (floor (* mida 0.4)))
+                       (r-centre    (floor (* mida 0.2)))
                        (color-bolla (cadr (member 'bolla casella)))
                        (color-eq    (cond ((eq equip 'e1) 'lila) (t 'taronja))))
                   (aplica-color color-eq)
@@ -242,7 +242,7 @@
                   (rellena-cercle cx cy r-centre)
                   ;; Brillantor proporcional
                   (color 255 255 255 255 255 255)
-                  (let ((desplacament (truncate (* mida 0.15))))
+                  (let ((desplacament (floor (* mida 0.15))))
                     (move cx (+ cy desplacament))
                     (draw cx (+ cy desplacament))))))
 

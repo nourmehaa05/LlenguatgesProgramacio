@@ -349,8 +349,8 @@
         (p2 (mem-llegir memoria 'base-enemiga-2)))
     (cond
       ((and p1 p2)
-       (list (truncate (/ (+ (car p1) (car p2)) 2))
-             (truncate (/ (+ (cadr p1) (cadr p2)) 2))))
+       (list (floor (/ (+ (car p1) (car p2)) 2))
+             (floor (/ (+ (cadr p1) (cadr p2)) 2))))
       (p1 p1)
       (t nil))))
 
