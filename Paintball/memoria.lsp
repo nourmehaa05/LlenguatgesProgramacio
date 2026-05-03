@@ -41,7 +41,9 @@
 ;; ==============================================================
 
 (defun mem-llegir (memoria clau)
-  "Retorna el valor associat a clau dins la memòria, o nil si no existeix."
+  "Retorna el valor associat a clau dins la memòria, o nil si no existeix.
+   memoria: alist de memòria compartida de l'equip
+   clau:    símbol que identifica l'entrada a llegir"
   (cond
     ((null memoria) nil)
     ((eq (caar memoria) clau)
@@ -50,7 +52,10 @@
 
 (defun mem-escriure (memoria clau valor)
   "Retorna una nova memòria amb clau actualitzada a valor.
-   Si clau no existeix, l'afegeix al final."
+   Si clau no existeix, l'afegeix al final.
+   memoria: alist de memòria compartida de l'equip
+   clau:    símbol que identifica l'entrada a escriure
+   valor:   nou valor a emmagatzemar"
   (cond
     ((null memoria)
      (list (list clau valor)))
@@ -61,7 +66,10 @@
            (mem-escriure (cdr memoria) clau valor)))))
 
 (defun mem-afegir (memoria clau element)
-  "Afegeix element a la llista associada a clau, o la crea si no existeix."
+  "Afegeix element a la llista associada a clau, o la crea si no existeix.
+   memoria: alist de memòria compartida de l'equip
+   clau:    símbol que identifica la llista dins la memòria
+   element: element a afegir al final de la llista"
   (let ((llista-actual (mem-llegir memoria clau)))
     (cond
       ((null llista-actual)
@@ -70,7 +78,10 @@
        (mem-escriure memoria clau (append llista-actual (list element)))))))
 
 (defun mem-treure (memoria clau element)
-  "Elimina la primera ocurrència d'element de la llista associada a clau."
+  "Elimina la primera ocurrència d'element de la llista associada a clau.
+   memoria: alist de memòria compartida de l'equip
+   clau:    símbol que identifica la llista dins la memòria
+   element: element a eliminar de la llista"
   (let ((llista-actual (mem-llegir memoria clau)))
     (cond
       ((null llista-actual) memoria)
@@ -85,7 +96,9 @@
                                               clau element)))))))))
 
 (defun mem-eliminar (memoria clau)
-  "Retorna una nova memòria sense l'entrada corresponent a clau."
+  "Retorna una nova memòria sense l'entrada corresponent a clau.
+   memoria: alist de memòria compartida de l'equip
+   clau:    símbol de l'entrada a eliminar completament"
   (cond
     ((null memoria) nil)
     ((eq (caar memoria) clau)
@@ -96,7 +109,9 @@
 
 (defun mem-fusionar (mem-1 mem-2)
   "Retorna una nova memòria amb els valors de mem-1 i mem-2 combinats.
-   Les claus de mem-2 sobreescriuen les de mem-1 en cas de conflicte."
+   Les claus de mem-2 sobreescriuen les de mem-1 en cas de conflicte.
+   mem-1: memòria base (les seves claus poden ser sobreescrites)
+   mem-2: memòria prioritària (les seves claus prevalen)"
   (cond
     ((null mem-2) mem-1)
     (t
@@ -106,7 +121,10 @@
 
 (defun mem-limpiar-antiga (memoria ronda-actual max-antiguitat)
   "Retorna una nova memòria eliminant l'entrada 'darrera-vista' si és massa antiga.
-   Es considera antiga si ronda-actual - darrera-vista > max-antiguitat."
+   Es considera antiga si ronda-actual - darrera-vista > max-antiguitat.
+   memoria:        alist de memòria compartida de l'equip
+   ronda-actual:   número de la ronda present
+   max-antiguitat: nombre màxim de rondes que es considera informació vàlida"
   (cond
     ((null memoria) nil)
     ((and (eq (caar memoria) 'darrera-vista)
@@ -117,7 +135,9 @@
            (mem-limpiar-antiga (cdr memoria) ronda-actual max-antiguitat)))))
 
 (defun mem-mostrar (memoria etiqueta)
-  "Imprimeix el contingut de la memòria amb una etiqueta. Útil per depurar."
+  "Imprimeix el contingut de la memòria amb una etiqueta. Útil per depurar.
+   memoria:  alist de memòria compartida a mostrar
+   etiqueta: text identificatiu que es mostra davant del contingut"
   (cond
     ((null memoria)
      (princ etiqueta)

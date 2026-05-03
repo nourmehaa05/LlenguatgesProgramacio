@@ -59,7 +59,10 @@
 ;; ==============================================================
 
 (defun substituir-camp (clau valor estat)
-  "Substitueix el valor associat a 'clau' dins l'alist 'estat'."
+  "Substitueix el valor associat a 'clau' dins l'alist 'estat'.
+   clau:  símbol que identifica el camp a actualitzar
+   valor: nou valor a assignar al camp
+   estat: alist de l'estat actual del joc"
   (cond
     ((null estat) nil)
     ((eq (caar estat) clau)
@@ -69,7 +72,8 @@
            (substituir-camp clau valor (cdr estat))))))
 
 (defun coord-valida-p (coord)
-  "Retorna T si 'coord' és una llista de dos enters no negatius."
+  "Retorna T si 'coord' és una llista de dos enters no negatius.
+   coord: coordenada a validar, ha de ser de la forma (x y)"
   (and (listp coord)
        (not (null coord))
        (not (null (cdr coord)))
@@ -79,14 +83,17 @@
        (>= (cadr coord) 0)))
 
 (defun accio-formada-p (accio)
-  "Retorna T si 'accio' té l'estructura correcta: (nom-accio llista-arguments)."
+  "Retorna T si 'accio' té l'estructura correcta: (nom-accio llista-arguments).
+   accio: acció a validar, ha de ser de la forma (símbol llista)"
   (and (listp accio)
        (symbolp (car accio))
        (listp (cadr accio))))
 
 (defun dist2 (coord-a coord-b)
   "Calcula la distància euclidiana al quadrat entre dues coordenades.
-   Retorna 999999 si alguna coordenada no és vàlida."
+   Retorna 999999 si alguna coordenada no és vàlida.
+   coord-a: primera coordenada (x y)
+   coord-b: segona coordenada (x y)"
   (cond
     ((and (coord-valida-p coord-a) (coord-valida-p coord-b))
      (let* ((dx (- (car coord-a) (car coord-b)))
@@ -95,14 +102,17 @@
     (t 999999)))
 
 (defun decrementar-si-numero (x)
-  "Decrementa x en 1, fins a un mínim de 0. Retorna 0 si x és nil."
+  "Decrementa x en 1, fins a un mínim de 0. Retorna 0 si x és nil.
+   x: valor enter a decrementar"
   (cond
     ((null x) 0)
     ((> x 0) (- x 1))
     (t 0)))
 
 (defun incrementar-si-numero (x quantitat)
-  "Incrementa x en 'quantitat'. Retorna 0 si x és nil, x si quantitat és nil."
+  "Incrementa x en 'quantitat'. Retorna 0 si x és nil, x si quantitat és nil.
+   x:        valor base a incrementar
+   quantitat: quantitat a sumar"
   (cond
     ((null x) 0)
     ((null quantitat) x)
@@ -115,7 +125,9 @@
 ;; ==============================================================
 
 (defun obtenir-casella-mapa (mapa coord)
-  "Retorna la casella del mapa a la coordenada indicada, o NIL si no existeix."
+  "Retorna la casella del mapa a la coordenada indicada, o NIL si no existeix.
+   mapa:  matriu del mapa (llista de llistes)
+   coord: coordenada (x y) de la casella a obtenir"
   (cond
     ((not (coord-valida-p coord)) nil)
     (t
@@ -126,40 +138,50 @@
          (t (obtenir-casella-fila mapa x y)))))))
 
 (defun obtenir-casella-fila (mapa x y)
-  "Navega per les files del mapa fins a la fila y i retorna la casella x."
+  "Navega per les files del mapa fins a la fila y i retorna la casella x.
+   mapa: matriu del mapa
+   x:    índex de columna de la casella
+   y:    índex de fila de la casella"
   (cond
     ((null mapa) nil)
     ((= y 0) (obtenir-casella-columna (car mapa) x))
     (t (obtenir-casella-fila (cdr mapa) x (- y 1)))))
 
 (defun obtenir-casella-columna (fila x)
-  "Navega per una fila fins a la columna x i retorna l'element."
+  "Navega per una fila fins a la columna x i retorna l'element.
+   fila: llista de caselles d'una fila del mapa
+   x:    índex de columna a obtenir"
   (cond
     ((null fila) nil)
     ((= x 0) (car fila))
     (t (obtenir-casella-columna (cdr fila) (- x 1)))))
 
 (defun obtenir-color-terra-casella (casella)
-  "Retorna el color de la casella de terra, o NIL si no és terra."
+  "Retorna el color de la casella de terra, o NIL si no és terra.
+   casella: casella del mapa de la qual s'obté el color"
   (cond
     ((and casella (eq (car casella) 'terra)) (cadr casella))
     (t nil)))
 
 (defun obtenir-equip-lab-casella (casella)
-  "Retorna l'equip que controla el laboratori de la casella, o NIL si no n'hi ha."
+  "Retorna l'equip que controla el laboratori de la casella, o NIL si no n'hi ha.
+   casella: casella del mapa que pot contenir un laboratori"
   (cond
     ((member 'lab casella) (cadr (member 'lab casella)))
     (t nil)))
 
 (defun casella-ocupada-per-element-p (casella)
-  "Retorna T si la casella conté algun element (lab, base o bolla)."
+  "Retorna T si la casella conté algun element (lab, base o bolla).
+   casella: casella del mapa a comprovar"
   (and casella
        (or (member 'lab casella)
            (member 'base casella)
            (member 'bolla casella))))
 
 (defun canviar-color-casella (casella color-nou)
-  "Retorna una nova casella amb el color actualitzat, mantenint l'element que conté."
+  "Retorna una nova casella amb el color actualitzat, mantenint l'element que conté.
+   casella:   casella original del mapa
+   color-nou: nou color a assignar ('r, 'g o 'b)"
   (cond
     ((null casella) nil)
     ((member 'lab casella)
@@ -177,17 +199,26 @@
     (t (list 'terra color-nou))))
 
 (defun canviar-lab-equip-casella (casella equip-nou)
-  "Retorna una nova casella de lab amb l'equip controlador actualitzat."
+  "Retorna una nova casella de lab amb l'equip controlador actualitzat.
+   casella:   casella que conté un laboratori
+   equip-nou: nou equip propietari del laboratori ('e1 o 'e2)"
   (cond
     ((member 'lab casella) (list 'terra (cadr casella) 'lab equip-nou))
     (t casella)))
 
 (defun actualitzar-casella-mapa (mapa coord nova-casella)
-  "Retorna un nou mapa amb la casella a 'coord' substituïda per 'nova-casella'."
+  "Retorna un nou mapa amb la casella a 'coord' substituïda per 'nova-casella'.
+   mapa:        matriu del mapa original
+   coord:       coordenada (x y) de la casella a substituir
+   nova-casella: nova casella a col·locar"
   (actualitzar-casella-mapa-fila mapa coord nova-casella 0))
 
 (defun actualitzar-casella-mapa-fila (mapa coord nova-casella y)
-  "Recorre les files del mapa fins a trobar la fila de 'coord' i l'actualitza."
+  "Recorre les files del mapa fins a trobar la fila de 'coord' i l'actualitza.
+   mapa:        matriu del mapa
+   coord:       coordenada objectiu
+   nova-casella: casella nova a col·locar
+   y:           índex de fila actual"
   (cond
     ((null mapa) nil)
     ((= y (cadr coord))
@@ -198,7 +229,11 @@
            (actualitzar-casella-mapa-fila (cdr mapa) coord nova-casella (+ y 1))))))
 
 (defun actualitzar-casella-mapa-columna (fila coord nova-casella x)
-  "Recorre una fila fins a la columna de 'coord' i substitueix la casella."
+  "Recorre una fila fins a la columna de 'coord' i substitueix la casella.
+   fila:        llista de caselles d'una fila
+   coord:       coordenada objectiu
+   nova-casella: casella nova a col·locar
+   x:           índex de columna actual"
   (cond
     ((null fila) nil)
     ((= x (car coord))
@@ -208,7 +243,9 @@
            (actualitzar-casella-mapa-columna (cdr fila) coord nova-casella (+ x 1))))))
 
 (defun coordenada-accio-dins-mapa-p (estat coord)
-  "Retorna T si 'coord' existeix dins els límits del mapa de l'estat."
+  "Retorna T si 'coord' existeix dins els límits del mapa de l'estat.
+   estat: estat actual del joc
+   coord: coordenada (x y) a comprovar"
   (let* ((mapa (cadr (assoc 'mapa estat)))
          (mapa-altura (length mapa))
          (mapa-amplada (cond ((> mapa-altura 0) (length (car mapa))) (t 0))))
@@ -218,13 +255,17 @@
          (not (null (obtenir-casella-mapa mapa coord))))))
 
 (defun coordenada-accio-no-aigua-p (estat coord)
-  "Retorna T si la casella a 'coord' és de terra (no és aigua)."
+  "Retorna T si la casella a 'coord' és de terra (no és aigua).
+   estat: estat actual del joc
+   coord: coordenada (x y) a comprovar"
   (let* ((mapa (cadr (assoc 'mapa estat)))
          (casella (obtenir-casella-mapa mapa coord)))
     (and casella (eq (car casella) 'terra))))
 
 (defun coordenada-accio-lliure-p (estat coord)
-  "Retorna T si la casella a 'coord' no té cap unitat ni element."
+  "Retorna T si la casella a 'coord' no té cap unitat ni element.
+   estat: estat actual del joc
+   coord: coordenada (x y) a comprovar"
   (let* ((unitats (cadr (assoc 'unitats estat)))
          (mapa (cadr (assoc 'mapa estat)))
          (casella (obtenir-casella-mapa mapa coord)))
@@ -233,7 +274,11 @@
 
 (defun coordenada-accio-pintable-p (estat unitat equip coord)
   "Retorna T si la casella a 'coord' pot ser pintada per 'unitat' de 'equip'.
-   No es pot pintar una casella amb unitat pròpia ni un lab propi."
+   No es pot pintar una casella amb unitat pròpia ni un lab propi.
+   estat:  estat actual del joc
+   unitat: unitat que vol pintar
+   equip:  equip de la unitat ('e1 o 'e2)
+   coord:  coordenada (x y) de la casella objectiu"
   (let* ((unitats (cadr (assoc 'unitats estat)))
          (mapa (cadr (assoc 'mapa estat)))
          (casella (obtenir-casella-mapa mapa coord))
@@ -253,28 +298,36 @@
 ;; ==============================================================
 
 (defun obtenir-unitat-per-id (unitats id-unitat)
-  "Retorna la unitat amb l'identificador 'id-unitat', o NIL si no existeix."
+  "Retorna la unitat amb l'identificador 'id-unitat', o NIL si no existeix.
+   unitats:   llista de totes les unitats del joc
+   id-unitat: identificador únic de la unitat a cercar"
   (cond
     ((null unitats) nil)
     ((= (nth 1 (car unitats)) id-unitat) (car unitats))
     (t (obtenir-unitat-per-id (cdr unitats) id-unitat))))
 
 (defun obtenir-unitat-per-coord (unitats coord)
-  "Retorna la unitat situada a 'coord', o NIL si no n'hi ha cap."
+  "Retorna la unitat situada a 'coord', o NIL si no n'hi ha cap.
+   unitats: llista de totes les unitats del joc
+   coord:   coordenada (x y) a cercar"
   (cond
     ((null unitats) nil)
     ((equal (nth 4 (car unitats)) coord) (car unitats))
     (t (obtenir-unitat-per-coord (cdr unitats) coord))))
 
 (defun unitat-a-coord-p (unitats coord)
-  "Retorna T si hi ha alguna unitat a la coordenada 'coord'."
+  "Retorna T si hi ha alguna unitat a la coordenada 'coord'.
+   unitats: llista de totes les unitats del joc
+   coord:   coordenada (x y) a comprovar"
   (cond
     ((null unitats) nil)
     ((equal (nth 4 (car unitats)) coord) t)
     (t (unitat-a-coord-p (cdr unitats) coord))))
 
 (defun obtenir-unitats-per-equip (unitats equip)
-  "Retorna la subllista d'unitats que pertanyen a 'equip'."
+  "Retorna la subllista d'unitats que pertanyen a 'equip'.
+   unitats: llista de totes les unitats del joc
+   equip:   símbol de l'equip a filtrar ('e1 o 'e2)"
   (cond
     ((null unitats) nil)
     ((eq (cadddr (car unitats)) equip)
@@ -283,7 +336,9 @@
     (t (obtenir-unitats-per-equip (cdr unitats) equip))))
 
 (defun obtenir-base-per-equip (unitats equip)
-  "Retorna la base de l'equip indicat, o NIL si ha estat destruïda."
+  "Retorna la base de l'equip indicat, o NIL si ha estat destruïda.
+   unitats: llista de totes les unitats del joc
+   equip:   símbol de l'equip ('e1 o 'e2)"
   (cond
     ((null unitats) nil)
     ((and (eq (nth 2 (car unitats)) 'base)
@@ -294,7 +349,11 @@
 (defun actualitzar-unitat (u nou-tr-pintar nou-tr-moure nou-tr-crear)
   "Retorna una nova unitat amb els temps de recuperació actualitzats.
    Si un paràmetre és NIL, es conserva el valor original.
-   Estructura: (unitat id tipus equip coord color-propi colors tr-pintar tr-moure tr-crear)"
+   Estructura: (unitat id tipus equip coord color-propi colors tr-pintar tr-moure tr-crear)
+   u:            unitat original a actualitzar
+   nou-tr-pintar: nou temps de recuperació de pintar (nil = conservar)
+   nou-tr-moure:  nou temps de recuperació de moure (nil = conservar)
+   nou-tr-crear:  nou temps de recuperació de crear (nil = conservar)"
   (list
    'unitat
    (nth 1 u)
@@ -308,14 +367,19 @@
    (cond ((null nou-tr-crear) (nth 9 u)) (t nou-tr-crear))))
 
 (defun moure-unitat (u nova-coord)
-  "Retorna la unitat 'u' amb la coordenada actualitzada a 'nova-coord'."
+  "Retorna la unitat 'u' amb la coordenada actualitzada a 'nova-coord'.
+   u:          unitat original
+   nova-coord: nova coordenada (x y) on es col·loca la unitat"
   (list 'unitat
         (nth 1 u) (nth 2 u) (nth 3 u)
         nova-coord
         (nth 5 u) (nth 6 u) (nth 7 u) (nth 8 u) (nth 9 u)))
 
 (defun actualitzar-unitat-per-coord (unitats coord nova-unitat)
-  "Retorna la llista d'unitats amb la unitat a 'coord' substituïda per 'nova-unitat'."
+  "Retorna la llista d'unitats amb la unitat a 'coord' substituïda per 'nova-unitat'.
+   unitats:    llista d'unitats original
+   coord:      coordenada de la unitat a substituir
+   nova-unitat: nova unitat que la reemplaça"
   (cond
     ((null unitats) nil)
     ((equal (nth 4 (car unitats)) coord)
@@ -325,7 +389,9 @@
            (actualitzar-unitat-per-coord (cdr unitats) coord nova-unitat)))))
 
 (defun eliminar-unitat-per-coord (unitats coord)
-  "Retorna la llista d'unitats sense la unitat situada a 'coord'."
+  "Retorna la llista d'unitats sense la unitat situada a 'coord'.
+   unitats: llista d'unitats original
+   coord:   coordenada de la unitat a eliminar"
   (cond
     ((null unitats) nil)
     ((equal (nth 4 (car unitats)) coord) (cdr unitats))
@@ -334,13 +400,18 @@
            (eliminar-unitat-per-coord (cdr unitats) coord)))))
 
 (defun afegir-color-pintat (colors color)
-  "Afegeix 'color' a la llista 'colors' si no hi és ja."
+  "Afegeix 'color' a la llista 'colors' si no hi és ja.
+   colors: llista de colors actuals de la unitat
+   color:  color a afegir ('r, 'g o 'b)"
   (cond
     ((member color colors) colors)
     (t (append colors (list color)))))
 
 (defun crear-base (id equip coord)
-  "Crea una nova base amb els valors inicials."
+  "Crea una nova base amb els valors inicials.
+   id:    identificador únic de la nova base
+   equip: equip propietari ('e1 o 'e2)
+   coord: coordenada (x y) on es col·loca la base"
   (list 'unitat id 'base equip coord
         nil  ; color-propi (les bases no en tenen)
         nil  ; colors-pintat (buida inicialment)
@@ -349,7 +420,8 @@
         0))  ; tr-crear (cooldown de creació de bolles)
 
 (defun contar-bolles-vives (unitats)
-  "Compta quantes bolles hi ha a la llista d'unitats."
+  "Compta quantes bolles hi ha a la llista d'unitats.
+   unitats: llista d'unitats a recórrer"
   (cond
     ((null unitats) 0)
     ((eq (nth 2 (car unitats)) 'bolla)
@@ -363,7 +435,10 @@
 
 (defun actualitzar-comptadors-lab (estat casella-desti equip)
   "Actualitza els comptadors de labs capturats quan una bolla pinta un lab.
-   Si el lab era de l'equip contrari, aquest el perd. L'equip atacant el guanya."
+   Si el lab era de l'equip contrari, aquest el perd. L'equip atacant el guanya.
+   estat:         estat actual del joc
+   casella-desti: casella del mapa que s'acaba de pintar
+   equip:         equip de la bolla que ha pintat ('e1 o 'e2)"
   (cond
     ((not (member 'lab casella-desti)) estat)
     (t
@@ -393,7 +468,9 @@
 
 (defun recuperacio-pinta (unitat estat)
   "Calcula el temps de recuperació de l'acció pintar per a una bolla.
-   Base = 3. Si la casella d'origen no és del color de la bolla, es triplica."
+   Base = 3. Si la casella d'origen no és del color de la bolla, es triplica.
+   unitat: bolla que executa l'acció de pintar
+   estat:  estat actual del joc"
   (let* ((mapa (cadr (assoc 'mapa estat)))
          (casella-origen (obtenir-casella-mapa mapa (nth 4 unitat)))
          (color-origen (obtenir-color-terra-casella casella-origen))
@@ -403,7 +480,10 @@
 
 (defun recuperacio-mou (unitat estat coord)
   "Calcula el temps de recuperació de l'acció moure per a una bolla.
-   Base = 1. Diagonal x1.4142. Si destí no és del color de la bolla x3."
+   Base = 1. Diagonal x1.4142. Si destí no és del color de la bolla x3.
+   unitat: bolla que executa l'acció de moure
+   estat:  estat actual del joc
+   coord:  coordenada (x y) destí del moviment"
   (let* ((mapa (cadr (assoc 'mapa estat)))
          (casella-desti (obtenir-casella-mapa mapa coord))
          (color-desti (obtenir-color-terra-casella casella-desti))
@@ -420,17 +500,23 @@
 ;; ==============================================================
 
 (defun coordenada-accio-dins-rang-base-p (unitat coord)
-  "Retorna T si 'coord' està dins del rang de creació de bolles d'una base (d²≤2, d²>0)."
+  "Retorna T si 'coord' està dins del rang de creació de bolles d'una base (d²≤2, d²>0).
+   unitat: base que vol crear la bolla
+   coord:  coordenada (x y) on es vol crear"
   (let* ((d2 (dist2 (nth 4 unitat) coord)))
     (and (> d2 0) (<= d2 2))))
 
 (defun coordenada-accio-dins-rang-pinta-p (unitat coord)
-  "Retorna T si 'coord' està dins del rang de pintura d'una bolla (d²≤5, d²>0)."
+  "Retorna T si 'coord' està dins del rang de pintura d'una bolla (d²≤5, d²>0).
+   unitat: bolla que vol pintar
+   coord:  coordenada (x y) objectiu de la pintura"
   (let* ((d2 (dist2 (nth 4 unitat) coord)))
     (and (<= d2 5) (> d2 0))))
 
 (defun coordenada-accio-dins-rang-mou-p (unitat coord)
-  "Retorna T si 'coord' està dins del rang de moviment d'una bolla (d²≤2, d²>0)."
+  "Retorna T si 'coord' està dins del rang de moviment d'una bolla (d²≤2, d²>0).
+   unitat: bolla que vol moure's
+   coord:  coordenada (x y) destí del moviment"
   (let* ((d2 (dist2 (nth 4 unitat) coord)))
     (and (<= d2 2) (> d2 0))))
 
@@ -441,7 +527,8 @@
 
 (defun carrega-mapa (nom)
   "Llegeix i retorna el mapa des d'un fitxer .map dins la carpeta maps/.
-   Retorna NIL si el fitxer no s'ha trobat."
+   Retorna NIL si el fitxer no s'ha trobat.
+   nom: nom del mapa sense extensió (p.ex. \"tiny\", \"huge60\")"
   (let* ((ruta (concatenate 'string "maps/" nom ".map"))
          (fitxer (open ruta :direction :input)))
     (cond
@@ -456,7 +543,9 @@
          mapa)))))
 
 (defun inici-mapa (nom-mapa pintar-cada-n)
-  "Carrega el mapa i inicia la partida."
+  "Carrega el mapa i inicia la partida.
+   nom-mapa:     nom del mapa a carregar (sense extensió)
+   pintar-cada-n: freqüència de repintat gràfic (1 = cada torn)"
   (color 0 0 0 255 255 255)
   (mode 0 0 640 375)
   (let* ((mapa (carrega-mapa nom-mapa))
@@ -468,7 +557,11 @@
   (inici-mapa "tiny" 1))
 
 (defun extraer-unitats (mapa x y next-id)
-  "Recorre el mapa i extreu totes les bases, retornant (llista-unitats next-id)."
+  "Recorre el mapa i extreu totes les bases, retornant (llista-unitats next-id).
+   mapa:    matriu del mapa a recórrer
+   x:       columna actual de la iteració
+   y:       fila actual de la iteració
+   next-id: següent identificador disponible per a les unitats"
   (cond
     ((null mapa) (list nil next-id))
     (t
@@ -482,7 +575,11 @@
 
 (defun extraer-unitats-fila (fila x y next-id)
   "Recorre una fila del mapa i extreu les bases que hi hagi.
-   Retorna (llista-unitats next-id)."
+   Retorna (llista-unitats next-id).
+   fila:    llista de caselles d'una fila del mapa
+   x:       columna actual de la iteració
+   y:       fila actual (per construir la coordenada)
+   next-id: següent identificador disponible per a les unitats"
   (cond
     ((null fila) (list nil next-id))
     (t
@@ -501,7 +598,8 @@
 (defun crear-estat-inicial (mapa)
   "Construeix i retorna l'estat inicial complet del joc a partir del mapa.
    L'estat és un alist amb: ronda, torn, mapa, unitats, next-id,
-   pintura de cada equip, memòria compartida i comptadors de labs."
+   pintura de cada equip, memòria compartida i comptadors de labs.
+   mapa: matriu del mapa carregada des del fitxer"
   (let* ((res (extraer-unitats mapa 0 0 0))
          (unitats (car res))
          (next-id (cadr res)))
@@ -525,7 +623,9 @@
 
 (defun jugar-partida-inicial (estat pintar-cada-n)
   "Executa les dues primeres meitats de torn sense actualitzar pintura ni cooldowns,
-   ja que és la ronda inicial. Després entra al bucle normal."
+   ja que és la ronda inicial. Després entra al bucle normal.
+   estat:         estat inicial del joc
+   pintar-cada-n: freqüència de repintat gràfic"
   (cls)
   (cond
     ((final-partida-p estat)
@@ -546,7 +646,9 @@
 (defun jugar-partida (estat pintar-cada-n)
   "Bucle recursiu principal de la partida. A cada iteració:
    actualitza pintura, baixa cooldowns, executa el torn i avança al següent.
-   Pinta el mapa cada 'pintar-cada-n' rondes."
+   Pinta el mapa cada 'pintar-cada-n' rondes.
+   estat:         estat actual del joc
+   pintar-cada-n: freqüència de repintat gràfic (pinta quan ronda mod N = 0)"
   (cond
     ((final-partida-p estat)
      (finalitzar-partida estat))
@@ -569,12 +671,14 @@
 ;; ==============================================================
 
 (defun final-partida-p (estat)
-  "Retorna T si la partida ha acabat: una base ha estat destruïda o s'han superat 1500 rondes."
+  "Retorna T si la partida ha acabat: una base ha estat destruïda o s'han superat 1500 rondes.
+   estat: estat actual del joc"
   (or (base-pintada-3-colors-p estat)
       (>= (cadr (assoc 'ronda estat)) 1500)))
 
 (defun base-pintada-3-colors-p (estat)
-  "Retorna T si alguna de les dues bases ha estat destruïda (no apareix a la llista d'unitats)."
+  "Retorna T si alguna de les dues bases ha estat destruïda (no apareix a la llista d'unitats).
+   estat: estat actual del joc"
   (let* ((unitats (cadr (assoc 'unitats estat)))
          (base-e1 (obtenir-base-per-equip unitats 'e1))
          (base-e2 (obtenir-base-per-equip unitats 'e2)))
@@ -582,7 +686,8 @@
 
 (defun finalitzar-partida (estat)
   "Determina el guanyador i mostra el resultat final per pantalla.
-   Criteris de desempat (per ordre): base destruïda > bolles vives > pintura > aleatori."
+   Criteris de desempat (per ordre): base destruïda > bolles vives > pintura > aleatori.
+   estat: estat final del joc"
   (let* ((unitats (cadr (assoc 'unitats estat)))
          (e1 (obtenir-unitats-per-equip unitats 'e1))
          (e2 (obtenir-unitats-per-equip unitats 'e2))
@@ -627,7 +732,8 @@
 ;; ==============================================================
 
 (defun seguent-torn (estat)
-  "Canvia l'equip actiu al torn següent. Si es passa de e2 a e1, incrementa la ronda."
+  "Canvia l'equip actiu al torn següent. Si es passa de e2 a e1, incrementa la ronda.
+   estat: estat actual del joc"
   (let ((torn (cadr (assoc 'torn estat))))
     (cond
       ((eq torn 'e1)
@@ -639,7 +745,8 @@
                           estat1))))))
 
 (defun actualitzar-pintura (estat)
-  "Afegeix pintura a l'equip actiu: +2 base, +1 per cada lab capturat."
+  "Afegeix pintura a l'equip actiu: +2 base, +1 per cada lab capturat.
+   estat: estat actual del joc"
   (let* ((torn (cadr (assoc 'torn estat)))
          (labs (cond
                  ((eq torn 'e1) (cadr (assoc 'labs-e1 estat)))
@@ -655,14 +762,17 @@
                         estat)))))
 
 (defun baixar-cooldowns (estat)
-  "Decrementa en 1 els temps de recuperació de les unitats de l'equip actiu."
+  "Decrementa en 1 els temps de recuperació de les unitats de l'equip actiu.
+   estat: estat actual del joc"
   (let* ((torn (cadr (assoc 'torn estat)))
          (unitats (cadr (assoc 'unitats estat)))
          (unitats2 (baixar-cooldowns-llista unitats torn)))
     (substituir-camp 'unitats unitats2 estat)))
 
 (defun baixar-cooldowns-llista (unitats equip)
-  "Recorre la llista d'unitats i decrementa els cooldowns de les de 'equip'."
+  "Recorre la llista d'unitats i decrementa els cooldowns de les de 'equip'.
+   unitats: llista de totes les unitats del joc
+   equip:   equip actiu del qual es decrementaran els cooldowns"
   (cond
     ((null unitats) nil)
     (t
@@ -677,7 +787,8 @@
 
 (defun baixar-cooldown-unitat (u)
   "Decrementa els temps de recuperació d'una unitat individual.
-   Les bases actualitzen tr-crear; les bolles actualitzen tr-pintar i tr-moure."
+   Les bases actualitzen tr-crear; les bolles actualitzen tr-pintar i tr-moure.
+   u: unitat individual a actualitzar"
   (let ((tipus (nth 2 u))
         (tr-pintar (nth 7 u))
         (tr-moure (nth 8 u))
@@ -693,13 +804,17 @@
       (t u))))
 
 (defun obtenir-pintura-equip (estat equip)
-  "Retorna la quantitat de pintura disponible de l'equip indicat."
+  "Retorna la quantitat de pintura disponible de l'equip indicat.
+   estat: estat actual del joc
+   equip: símbol de l'equip ('e1 o 'e2)"
   (cond
     ((eq equip 'e1) (cadr (assoc 'pintura-e1 estat)))
     (t (cadr (assoc 'pintura-e2 estat)))))
 
 (defun obtenir-memoria-equip (estat equip)
-  "Retorna la memòria compartida de l'equip indicat."
+  "Retorna la memòria compartida de l'equip indicat.
+   estat: estat actual del joc
+   equip: símbol de l'equip ('e1 o 'e2)"
   (cond
     ((eq equip 'e1) (cadr (assoc 'memoria-e1 estat)))
     (t (cadr (assoc 'memoria-e2 estat)))))
@@ -710,17 +825,23 @@
 ;; ==============================================================
 
 (defun executar-torn (estat)
-  "Executa el torn de l'equip actiu, processant totes les seves unitats."
+  "Executa el torn de l'equip actiu, processant totes les seves unitats.
+   estat: estat actual del joc"
   (let ((equip (cadr (assoc 'torn estat))))
     (executar-unitats estat equip)))
 
 (defun executar-unitats (estat equip)
-  "Inicia el processament recursiu de les unitats de 'equip'."
+  "Inicia el processament recursiu de les unitats de 'equip'.
+   estat: estat actual del joc
+   equip: equip actiu del torn ('e1 o 'e2)"
   (executar-unitats-rec estat equip nil))
 
 (defun executar-unitats-rec (estat equip ids-processats)
   "Processa les unitats de 'equip' una a una, de manera recursiva.
-   Les unitats creades durant el torn també poden actuar."
+   Les unitats creades durant el torn també poden actuar.
+   estat:          estat actual del joc
+   equip:          equip actiu del torn
+   ids-processats: llista d'ids de les unitats ja processades en aquest torn"
   (let ((unitat (obtenir-seguent-unitat-equip estat equip ids-processats)))
     (cond
       ((null unitat) estat)
@@ -732,13 +853,18 @@
          (executar-unitats-rec estat2 equip (cons id-unitat ids-processats)))))))
 
 (defun obtenir-seguent-unitat-equip (estat equip ids-processats)
-  "Retorna la primera unitat de 'equip' que encara no ha estat processada."
+  "Retorna la primera unitat de 'equip' que encara no ha estat processada.
+   estat:          estat actual del joc
+   equip:          equip actiu del torn
+   ids-processats: llista d'ids de les unitats ja processades"
   (obtenir-seguent-unitat-equip-rec
    (obtenir-unitats-per-equip (cadr (assoc 'unitats estat)) equip)
    ids-processats))
 
 (defun obtenir-seguent-unitat-equip-rec (unitats ids-processats)
-  "Cerca la primera unitat de la llista que no estigui a 'ids-processats'."
+  "Cerca la primera unitat de la llista que no estigui a 'ids-processats'.
+   unitats:        llista d'unitats de l'equip actiu
+   ids-processats: llista d'ids de les unitats ja processades"
   (cond
     ((null unitats) nil)
     ((member (nth 1 (car unitats)) ids-processats)
@@ -748,7 +874,10 @@
 (defun construir-info-unitat (estat unitat equip)
   "Construeix la llista d'informació que es passa a l'agent intel·ligent.
    Format: (ronda equip pintura id-unitat tipus-unitat coordenada colors-pintat
-            color-propi tr-pintar tr-moure visió memòria-compartida)"
+            color-propi tr-pintar tr-moure visió memòria-compartida)
+   estat:  estat actual del joc
+   unitat: unitat per a la qual es construeix la informació
+   equip:  equip actiu del torn"
   (list (cadr (assoc 'ronda estat))
         equip
         (obtenir-pintura-equip estat equip)
@@ -764,7 +893,8 @@
 
 (defun cridar-agent-unitat (info-unitat)
   "Crida la funció de l'agent intel·ligent corresponent a l'equip de la unitat.
-   Retorna la llista d'accions que l'agent vol executar."
+   Retorna la llista d'accions que l'agent vol executar.
+   info-unitat: llista d'informació construïda per construir-info-unitat"
   (let ((equip (cadr info-unitat)))
     (cond
       ((eq equip 'e1) (agent-cms213 info-unitat))
@@ -772,7 +902,11 @@
       (t nil))))
 
 (defun processar-accions-unitat (estat unitat equip accions)
-  "Processa recursivament la llista d'accions d'una unitat, validant i aplicant cada una."
+  "Processa recursivament la llista d'accions d'una unitat, validant i aplicant cada una.
+   estat:   estat actual del joc
+   unitat:  unitat que executa les accions
+   equip:   equip de la unitat
+   accions: llista d'accions a processar"
   (cond
     ((null accions) estat)
     ((not (listp accions)) estat)
@@ -796,14 +930,20 @@
 
 (defun validar-coord-base (estat coord)
   "Comprova que una coordenada és vàlida, dins del mapa i sobre terra.
-   Funció auxiliar compartida per les tres validacions d'acció."
+   Funció auxiliar compartida per les tres validacions d'acció.
+   estat: estat actual del joc
+   coord: coordenada (x y) a validar"
   (and (coord-valida-p coord)
        (coordenada-accio-dins-mapa-p estat coord)
        (coordenada-accio-no-aigua-p estat coord)))
 
 (defun validar-accio (estat unitat equip accio)
   "Comprova si una acció és vàlida per a la unitat i l'estat actuals.
-   Retorna T si és vàlida, NIL si no."
+   Retorna T si és vàlida, NIL si no.
+   estat:  estat actual del joc
+   unitat: unitat que vol executar l'acció
+   equip:  equip de la unitat
+   accio:  acció a validar, de la forma (nom-accio llista-arguments)"
   (cond
     ((not (accio-formada-p accio)) nil)
     (t
@@ -821,7 +961,12 @@
 
 (defun validar-crea-bolla (estat unitat equip color coord)
   "Valida l'acció crea-bolla d'una base: comprova tipus, cooldown, pintura,
-   color vàlid, coordenada dins rang i lliure."
+   color vàlid, coordenada dins rang i lliure.
+   estat:  estat actual del joc
+   unitat: base que vol crear la bolla
+   equip:  equip de la base
+   color:  color de la bolla a crear ('r, 'g o 'b)
+   coord:  coordenada (x y) on es vol crear la bolla"
   (and (eq (nth 2 unitat) 'base)
        (temps-unitat-disponible-p unitat 'crear)
        (pintura-suficient-crea-bolla-p estat equip)
@@ -832,7 +977,11 @@
 
 (defun validar-pinta (estat unitat equip coord)
   "Valida l'acció pinta d'una bolla: comprova tipus, cooldown,
-   coordenada dins rang i que la casella sigui pintable."
+   coordenada dins rang i que la casella sigui pintable.
+   estat:  estat actual del joc
+   unitat: bolla que vol pintar
+   equip:  equip de la bolla
+   coord:  coordenada (x y) de la casella a pintar"
   (and (eq (nth 2 unitat) 'bolla)
        (temps-unitat-disponible-p unitat 'pintar)
        (validar-coord-base estat coord)
@@ -841,7 +990,11 @@
 
 (defun validar-mou (estat unitat equip coord)
   "Valida l'acció mou d'una bolla: comprova tipus, cooldown,
-   coordenada dins rang i que la casella destí estigui lliure."
+   coordenada dins rang i que la casella destí estigui lliure.
+   estat:  estat actual del joc
+   unitat: bolla que vol moure's
+   equip:  equip de la bolla
+   coord:  coordenada (x y) destí del moviment"
   (and (eq (nth 2 unitat) 'bolla)
        (temps-unitat-disponible-p unitat 'moure)
        (validar-coord-base estat coord)
@@ -849,7 +1002,9 @@
        (coordenada-accio-lliure-p estat coord)))
 
 (defun temps-unitat-disponible-p (unitat tipus-accio)
-  "Retorna T si el temps de recuperació de 'tipus-accio' és menor que 1."
+  "Retorna T si el temps de recuperació de 'tipus-accio' és menor que 1.
+   unitat:      unitat a comprovar
+   tipus-accio: tipus d'acció a comprovar ('pintar, 'moure o 'crear)"
   (let ((temps (cond
                  ((eq tipus-accio 'pintar) (nth 7 unitat))
                  ((eq tipus-accio 'moure) (nth 8 unitat))
@@ -858,7 +1013,9 @@
     (or (null temps) (< temps 1))))
 
 (defun pintura-suficient-crea-bolla-p (estat equip)
-  "Retorna T si l'equip té almenys 50 unitats de pintura per crear una bolla."
+  "Retorna T si l'equip té almenys 50 unitats de pintura per crear una bolla.
+   estat: estat actual del joc
+   equip: equip a comprovar ('e1 o 'e2)"
   (>= (obtenir-pintura-equip estat equip) 50))
 
 
@@ -867,7 +1024,11 @@
 ;; ==============================================================
 
 (defun aplicar-accio (estat unitat equip accio)
-  "Aplica una acció validada i retorna el nou estat resultant."
+  "Aplica una acció validada i retorna el nou estat resultant.
+   estat:  estat actual del joc
+   unitat: unitat que executa l'acció
+   equip:  equip de la unitat
+   accio:  acció a aplicar, de la forma (nom-accio llista-arguments)"
   (cond
     ((not (accio-formada-p accio)) estat)
     (t
@@ -886,7 +1047,12 @@
 
 (defun aplicar-crea-bolla (estat unitat equip color coord)
   "Crea una nova bolla, incrementa el cooldown de la base, resta 50 de pintura
-   i actualitza el mapa i la llista d'unitats."
+   i actualitza el mapa i la llista d'unitats.
+   estat:  estat actual del joc
+   unitat: base que crea la bolla
+   equip:  equip de la base
+   color:  color de la nova bolla ('r, 'g o 'b)
+   coord:  coordenada (x y) on es crea la bolla"
   (let* ((unitats (cadr (assoc 'unitats estat)))
          (next-id (cadr (assoc 'next-id estat)))
          (pintura-equip (obtenir-pintura-equip estat equip))
@@ -922,7 +1088,11 @@
 (defun aplicar-pinta (estat unitat equip coord)
   "Pinta la casella destí i actualitza l'element que hi ha (bolla, base o lab).
    Si una bolla o base queda pintada de 3 colors, s'elimina (explota).
-   Si es pinta un lab, canvia de propietari."
+   Si es pinta un lab, canvia de propietari.
+   estat:  estat actual del joc
+   unitat: bolla que executa l'acció de pintar
+   equip:  equip de la bolla
+   coord:  coordenada (x y) de la casella a pintar"
   (let* ((mapa (cadr (assoc 'mapa estat)))
          (unitats (cadr (assoc 'unitats estat)))
          (casella-desti (obtenir-casella-mapa mapa coord))
@@ -1014,7 +1184,11 @@
 
 (defun aplicar-mou (estat unitat equip coord)
   "Mou la bolla a la coordenada destí, incrementa el seu cooldown de moviment
-   i actualitza el mapa (casella origen buida, casella destí amb la bolla)."
+   i actualitza el mapa (casella origen buida, casella destí amb la bolla).
+   estat:  estat actual del joc
+   unitat: bolla que es mou
+   equip:  equip de la bolla
+   coord:  coordenada (x y) destí del moviment"
   (let* ((unitats (cadr (assoc 'unitats estat)))
          (unitat-actual (obtenir-unitat-per-id unitats (nth 1 unitat)))
          (coord-origen (nth 4 unitat-actual))
@@ -1038,7 +1212,11 @@
     (substituir-camp 'mapa mapa2 estat1)))
 
 (defun aplicar-escriu-memoria (estat unitat equip nova-memoria)
-  "Actualitza la memòria compartida de l'equip amb el nou valor proporcionat per la unitat."
+  "Actualitza la memòria compartida de l'equip amb el nou valor proporcionat per la unitat.
+   estat:       estat actual del joc
+   unitat:      unitat que escriu a la memòria (no s'usa directament)
+   equip:       equip propietari de la memòria ('e1 o 'e2)
+   nova-memoria: nou valor de la memòria a emmagatzemar"
   (cond
     ((eq equip 'e1) (substituir-camp 'memoria-e1 nova-memoria estat))
     (t (substituir-camp 'memoria-e2 nova-memoria estat))))
@@ -1051,7 +1229,9 @@
 (defun construir-visio-unitat (estat unitat)
   "Construeix la llista de caselles visibles per a 'unitat' segons el seu rang.
    Rang base = 64u², rang bolla = 20u². Itera per desplaçaments dins el quadrat
-   del radi i filtra les caselles dins el cercle."
+   del radi i filtra les caselles dins el cercle.
+   estat:  estat actual del joc
+   unitat: unitat per a la qual es calcula la visió"
   (let* ((rango (cond ((eq (nth 2 unitat) 'base) 64) (t 20)))
          (coord-origen (nth 4 unitat))
          (mapa (cadr (assoc 'mapa estat)))
@@ -1061,7 +1241,14 @@
 
 (defun construir-visio-dx (mapa unitats coord-origen rango r dx dy)
   "Itera per tots els desplaçaments (dx, dy) dins el quadrat [-r, r]×[-r, r]
-   i afegeix a la visió les caselles amb d²≤rango que existeixin al mapa."
+   i afegeix a la visió les caselles amb d²≤rango que existeixin al mapa.
+   mapa:        matriu del mapa
+   unitats:     llista de totes les unitats del joc
+   coord-origen: coordenada central de la visió
+   rango:       rang màxim en distància al quadrat
+   r:           radi del quadrat de cerca (truncate(sqrt(rango)))
+   dx:          desplaçament horitzontal actual
+   dy:          desplaçament vertical actual"
   (cond
     ((> dx r) nil)
     ((> dy r)
@@ -1086,7 +1273,10 @@
 
 (defun construir-entrada-visio (coord casella unitat-casella)
   "Construeix l'entrada de la llista de visió per a una casella concreta.
-   Si és aigua, retorna (coord 'aigua). Si és terra, retorna informació completa."
+   Si és aigua, retorna (coord 'aigua). Si és terra, retorna informació completa.
+   coord:          coordenada (x y) de la casella
+   casella:        contingut de la casella al mapa
+   unitat-casella: unitat present a la casella, o NIL si no n'hi ha"
   (cond
     ((eq (car casella) 'aigua)
      (list coord 'aigua))
