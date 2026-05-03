@@ -23,9 +23,6 @@
 ;;   - mem-limpiar-antiga:  eliminar entrades massa antigues
 ;;   - mem-mostrar:         imprimir la memòria per depuració
 ;; ============================================================
-;; Com carregar aquest fitxer:
-;;   (load "memoria")
-;; ============================================================
 ;; Estructura de la memòria:
 ;;   La memòria és una alist (association list) de parells clau-valor:
 ;;     ( (clau1 valor1) (clau2 valor2) ... )

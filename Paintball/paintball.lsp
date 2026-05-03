@@ -13,6 +13,43 @@
 ;;   - Oliver Tomàs, Antoni
 ;; Lliurament: primera convocatòria.
 ;; ============================================================
+;; Com iniciar una partida:
+;;   (inici)                        -> mapa "tiny", pinta cada torn
+;;   (inici-mapa "nom-mapa" N)      -> mapa personalitzat, pinta cada N torns
+;;   Exemples:
+;;     (inici-mapa "tiny" 1)
+;;     (inici-mapa "huge60" 10)
+;; ============================================================
+;; Aspectes opcionals implementats:
+;;
+;;   Controlador general (paintball.lsp):
+;;     - Mapes de fins a 60x60 caselles
+;;     - Límit de 1500 torns
+;;     - Caselles canvien de color:
+;;         - Quan una bolla pinta una base, bolla o lab, la casella
+;;           de terra també es pinta del color de la bolla
+;;         - Quan la base crea una bolla, la casella es pinta del
+;;           color de la bolla creada
+;;   - Temps de recuperació de les unitats:
+;;       - Base: tr-crear=1 (creació de bolles)
+;;       - Bolla: tr-pintar=3, tr-moure=1 (modificables segons casella):
+;;           - Si la casella d'origen/destí no és del color de la bolla, tr es triplica
+;;           - Si el moviment és diagonal, tr-moure es multiplica per 1.4142
+;;     - Memòria compartida entre unitats (memoria.lsp)
+;;     - Pintar cada N torns (paràmetre pintar-cada-n a inici-mapa)
+;;
+;;   Mòdul gràfic (grafics.lsp):
+;;     - Color de cada casella de terra mostrat gràficament
+;;
+;;   Agents intel·ligents (agent-cms213.lsp, agent-nms864.lsp):
+;;     - Ús de la memòria compartida per coordinar unitats entre torns
+;;     - Estratègies avançades:
+;;         - Assignació de rols per id (atacant, semi-defensor, lab)
+;;         - Triangulació de la posició de la base enemiga (E2)
+;;         - Detecció d'encaixonament i moviment pseudo-aleatori
+;;         - Zones d'exploració i patrulla dinàmiques
+;;
+;; ============================================================
 ;; Disseny funcional:
 ;;   El programa segueix un disseny purament funcional: no hi ha
 ;;   reassignacions ni mutació d'estructures. L'estat del joc és
@@ -24,22 +61,7 @@
 ;;   S'usa la llibreria tco per optimitzar les crides recursives
 ;;   en posició final i evitar desbordament de pila en partides
 ;;   llargues o mapes grans.
-;; ============================================================
-;; Com iniciar una partida:
-;;   (inici)                        -> mapa "tiny", pinta cada torn
-;;   (inici-mapa "nom-mapa" N)      -> mapa personalitzat, pinta cada N torns
-;;   Exemples:
-;;     (inici-mapa "tiny" 1)
-;;     (inici-mapa "huge60" 10)
-;; ============================================================
-;; Aspectes opcionals implementats:
-;;   - Límit de 1500 torns
-;;   - Mapes de fins a 60x60
-;;   - Memòria compartida entre unitats
-;;   - Caselles es pinten:
-;;          - Bolla pinta la casella si pinta un lab, una base o una bolla
-;;          - Base crea bolles i la casella es pinta del color de la bolla
-;;   - Pintar cada N torns (paràmetre pintar-cada-n)
+;;
 ;; ============================================================
 ;; Descripció de les funcions d'aquest fitxer:
 ;;   - Funcions auxiliars generals (substituir-camp, dist2, etc.)
@@ -55,6 +77,11 @@
 ;;   - Validació d'accions: crea-bolla, pinta, mou, escriu-memoria
 ;;   - Aplicació d'accions: actualització d'estat, mapa i unitats
 ;;   - Construcció de la visió de cada unitat
+;; ============================================================
+;; Eines d'IA emprades:
+;;   Aquest projecte s'ha desenvolupat amb el suport de Claude
+;;   Sonnet 4.6 com a eina d'assistència per a la documentació,
+;;   revisió de codi i depuració d'errors.
 ;; ============================================================
 ;; Fitxers necessaris:
 (load 'common) ; https://almy.us/files/xl305req.zip
