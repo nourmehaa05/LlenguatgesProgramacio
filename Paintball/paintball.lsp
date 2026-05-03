@@ -13,6 +13,18 @@
 ;;   - Oliver Tomàs, Antoni
 ;; Lliurament: primera convocatòria.
 ;; ============================================================
+;; Disseny funcional:
+;;   El programa segueix un disseny purament funcional: no hi ha
+;;   reassignacions ni mutació d'estructures. L'estat del joc és
+;;   una llista associativa (alist) que es passa i es retorna en
+;;   cada funció. Les actualitzacions es fan creant nous estats.
+;;   El bucle principal és recursiu de cua. Les unitats s'executen
+;;   una a una, cridant l'agent intel·ligent corresponent i
+;;   aplicant les accions validades al nou estat.
+;;   S'usa la llibreria tco per optimitzar les crides recursives
+;;   en posició final i evitar desbordament de pila en partides
+;;   llargues o mapes grans.
+;; ============================================================
 ;; Com iniciar una partida:
 ;;   (inici)                        -> mapa "tiny", pinta cada torn
 ;;   (inici-mapa "nom-mapa" N)      -> mapa personalitzat, pinta cada N torns
