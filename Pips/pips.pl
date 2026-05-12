@@ -3,11 +3,11 @@
 % Assignatura : Llenguatges de Programació, curs 2025-26
 % Pràctica    : Pràctica final – PROLOG (Pips puzzle)
 % Data        : 2025
-% Nom         :
+% Nom         : 
 %               - Carolina Marín Sánchez
 %               - Nour Iman Mehannek Samah
 % Grup        : 101
-% Professors  :
+% Professors  : 
 %               - Cabot Nadal, Miquel Àngel
 %               - Oliver Tomàs, Antoni
 % Convocatòria: Ordinària
@@ -35,9 +35,53 @@
 %   4) Imprimir el tauler amb la solució (opcional):
 %      ?- puzzle(20250818, easy, R, P, S), imprimeix_solucio(R, P, S).
 %
+%
 % ============================================================
 % ASPECTES OPCIONALS IMPLEMENTATS
 % ============================================================
+%
+%   - solucio_pips/3 amb altres arguments no instanciats
+%     * Si la Solucio ja es coneix, es pot recuperar la resta
+%       igualant amb la base de puzles disponibles. Per exemple:
+%         ?- puzzle(20250818, easy, Regions, Peces, Solucio),
+%            solucio_pips(Regions, Peces, Solucio).
+%       Això també permet consultar quin conjunt de peces o
+%       quines regions corresponen a una solucio donada.
+%
+%     Exemples:
+%       A) Recuperar les peces a partir de regions + solucio:
+%          ?- puzzle(20250818, easy, Regions, _, Solucio),
+%             solucio_pips(Regions, Peces, Solucio).
+%          % Esperat: Peces = [[2,2],[2,3],[5,2],[6,6]].
+%
+%       B) Recuperar les regions a partir de peces + solucio:
+%          ?- puzzle(20250818, easy, _, Peces, Solucio),
+%             solucio_pips(Regions, Peces, Solucio).
+%          % Esperat: Regions = [region(empty, nil, [[0,0]]), ...].
+%
+%   - solucio_pips/3 amb arguments parcialment instanciats
+%     * Qualsevol dels tres arguments (llistes) pot contenir
+%       variables internes. Exemple:
+%         Solucio = [[[1,1],[1,2]], _, _, _],
+%         solucio_pips(Regions, Peces, Solucio).
+%     * El predicat funciona gràcies a la unificacio i al
+%       backtracking, que exploren les possibles assignacions.
+%
+%     Exemples:
+%       A) Solucio parcial (variables internes):
+%          ?- puzzle(20250818, easy, Regions, Peces, _),
+%             solucio_pips(Regions, Peces, [[[1,1],[1,2]], _, _, _]).
+%          % Esperat: true (la solucio completa s'unifica).
+%
+%       B) Peces parcials:
+%          ?- puzzle(20250818, easy, Regions, _, Solucio),
+%             solucio_pips(Regions, [[2,2], _, [5,2], [6,6]], Solucio).
+%          % Esperat: true.
+%
+%       C) Regions parcials:
+%          ?- puzzle(20250818, easy, _, Peces, Solucio),
+%             solucio_pips([region(empty, nil, [[0,0]]), _], Peces, Solucio).
+%          % Esperat: true.
 %
 %   - Impressió del tauler per terminal: imprimeix_solucio/3
 %     Mostra els valors de cada casella del tauler, i ' . '
@@ -47,23 +91,26 @@
 % DISSENY LÒGIC
 % ============================================================
 %
-%   El predicat principal solucio_pips/3 funciona en dos modes:
+%   El predicat principal solucio_pips/3 funciona tant per
+%   comprovar (tots els arguments instanciats) com per generar
+%   la solució (Solucio no instanciada), gracies al backtracking.
 %
-%   MODE VERIFICACIÓ (Solucio instanciada):
-%     1. Construeix el tauler directament des de Peces+Solucio
-%        amb construeix_tauler/3, sense backtracking (O(n)).
-%     2. Comprova que cada peça ocupa caselles adjacents i vàlides.
-%     3. Comprova totes les restriccions de les regions.
+%   El procés és:
+%   1. S'extreuen totes les caselles valides del tauler a partir
+%      de les regions (totes_caselles/2).
+%   2. Per a cada peça, es trien dues caselles adjacents i lliures
+%      on col·locar-la (col_loca_peces/5). El tauler s'acumula
+%      com una llista de parells Coordenada-Valor.
+%   3. Un cop col·locades totes les peces, es comproven totes les
+%      restriccions de les regions (comprova_regions/2).
+%   Si alguna restricció falla, Prolog fa backtracking i prova
+%   una col·locació diferent.
 %
-%   MODE GENERACIÓ (Solucio no instanciada):
-%     1. S'extreuen totes les caselles vàlides del tauler a partir
-%        de les regions (totes_caselles/2).
-%     2. Per a cada peça, es trien dues caselles adjacents i lliures
-%        amb ordre canònic ([F1,C1] @< [F2,C2]) per evitar duplicats.
-%        S'usa select/3 per treballar directament amb caselles lliures.
-%     3. Un cop col·locades totes les peces, es comproven totes les
-%        restriccions de les regions (comprova_regions/2).
-%
+% ============================================================
+
+% ============================================================
+% BASE DE CONEIXEMENTS: PUZLES
+% Format: puzzle(ID, Dificultat, Regions, Peces, Solucio)
 % ============================================================
 
 :- consult('puzzles.pl').
@@ -71,78 +118,55 @@
 % ============================================================
 % solucio_pips(+Regions, +Peces, ?Solucio)
 %
-%   Predicat principal.
-%
-%   MODE VERIFICACIÓ: si Solucio ja està instanciada, construeix
-%   el tauler directament i comprova les restriccions sense
-%   recórrer l'espai de cerca (eficient, O(n)).
-%
-%   MODE GENERACIÓ: si Solucio no està instanciada, genera totes
-%   les solucions possibles per backtracking.
+%   Predicat principal. Donades les Regions i les Peces,
+%   comprova (si Solucio esta instanciada) o genera (si no
+%   ho esta) la Solucio del puzle.
 %
 %   Regions : llista de region(Condicio, Objectiu, Caselles)
-%   Peces   : llista de [V1, V2] (valors de cada peça de dominó)
-%   Solucio : llista de [[F1,C1],[F2,C2]] (posició de cada peça)
+%   Peces   : llista de [V1, V2] (valors de cada peca de domino)
+%   Solucio : llista de [[F1,C1],[F2,C2]] (posicio de cada peca)
 % ============================================================
 solucio_pips(Regions, Peces, Solucio) :-
-    ( nonvar(Solucio) ->
-        % Mode verificació: construcció directa del tauler
-        totes_caselles(Regions, Caselles),
-        construeix_tauler(Peces, Solucio, Tauler),
-        valida_peces_solucio(Solucio, Caselles),
-        comprova_regions(Regions, Tauler)
-    ;
-        % Mode generació: backtracking
-        totes_caselles(Regions, Caselles),
-        col_loca_peces(Peces, Caselles, Solucio),
-        construeix_tauler(Peces, Solucio, Tauler),
-        comprova_regions(Regions, Tauler)
-    ).
+    % Cas principal: si Regions i Peces ja estan fixades,
+    % fem servir el procediment general de resolucio/
+    % comprovacio sobre el tauler construit a partir d'elles.
+    nonvar(Regions),
+    nonvar(Peces),
+    !,
+    solucio_pips_directe(Regions, Peces, Solucio).
+solucio_pips(Regions, Peces, Solucio) :-
+    % Cas relacional: si la Solucio ja es coneix, podem recuperar
+    % les Regions o les Peces corresponents consultant la base
+    % de coneixements de puzles ja definits.
+    nonvar(Solucio),
+    !,
+    puzzle(_, _, Regions, Peces, Solucio).
 
 % ============================================================
-% construeix_tauler(+Peces, +Solucio, -Tauler)
+% solucio_pips_directe(+Regions, +Peces, ?Solucio)
 %
-%   Construeix el tauler (llista de Coord-Valor) directament
-%   a partir de Peces i Solucio, sense backtracking.
-%   Usat pel mode verificació i per imprimeix_solucio/3.
-%
-%   Peces   : llista de [V1, V2]
-%   Solucio : llista de [[F1,C1],[F2,C2]]
-%   Tauler  : llista de [F,C]-Valor
+%   Implementacio operativa de la resolucio/comprovacio quan les
+%   regions i les peces ja estan fixades.
 % ============================================================
-construeix_tauler([], [], []).
-construeix_tauler([[V1,V2]|Ps], [[[F1,C1],[F2,C2]]|Sol],
-                  [[F1,C1]-V1, [F2,C2]-V2 | T]) :-
-    construeix_tauler(Ps, Sol, T).
-
-% ============================================================
-% valida_peces_solucio(+Solucio, +Caselles)
-%
-%   Comprova que cada peça de la solució:
-%     - Ocupa exactament dues caselles
-%     - Ambdues caselles pertanyen al tauler (Caselles)
-%     - Les dues caselles són adjacents
-%     - No hi ha caselles repetides entre peces
-%
-%   Usat exclusivament pel mode verificació.
-% ============================================================
-valida_peces_solucio(Solucio, Caselles) :-
-    valida_peces_aux(Solucio, Caselles, []).
-
-valida_peces_aux([], _, _).
-valida_peces_aux([[[F1,C1],[F2,C2]]|Rest], Caselles, Usades) :-
-    membre([F1,C1], Caselles),
-    membre([F2,C2], Caselles),
-    adjacent([F1,C1], [F2,C2]),
-    \+ membre([F1,C1], Usades),
-    \+ membre([F2,C2], Usades),
-    valida_peces_aux(Rest, Caselles, [[F1,C1],[F2,C2]|Usades]).
+solucio_pips_directe(Regions, Peces, Solucio) :-
+    % Pas 1: obtenir totes les caselles valides del tauler a
+    % partir de les regions disponibles.
+    totes_caselles(Regions, Caselles),
+    % Pas 2: col.locar totes les peces al tauler, provant totes
+    % les posicions i orientacions possibles.
+    col_loca_peces(Peces, Caselles, [], Tauler, Solucio),
+    % Pas 3: verificar que els valors del tauler compleixen totes
+    % les restriccions de les regions.
+    comprova_regions(Regions, Tauler).
 
 % ============================================================
 % totes_caselles(+Regions, -Caselles)
 %
 %   Extreu la llista (sense duplicats) de totes les caselles
 %   que apareixen a les regions del puzle.
+%
+%   Regions  : llista de region(_, _, Caselles)
+%   Caselles : llista de coordenades [Fila, Columna]
 % ============================================================
 totes_caselles([], []).
 totes_caselles([region(_, _, Cells)|Rs], Totes) :-
@@ -152,7 +176,7 @@ totes_caselles([region(_, _, Cells)|Rs], Totes) :-
 % ============================================================
 % unio(+L1, +L2, -L3)
 %
-%   Unió de dues llistes sense duplicats.
+%   Unio de dues llistes sense duplicats.
 % ============================================================
 unio([], L, L).
 unio([X|Xs], L, R) :-
@@ -162,38 +186,46 @@ unio([X|Xs], L, [X|R]) :-
     unio(Xs, L, R).
 
 % ============================================================
-% col_loca_peces(+Peces, +Caselles, -Solucio)
+% col_loca_peces(+Peces, +Caselles, +Acc, -Tauler, -Solucio)
 %
-%   Usa select/3 per treballar amb caselles lliures
-%   directament, evitant l'acumulador separat i les cerques
-%   dobles (membre + ocupada).
+%   Per a cada peca, tria dues caselles adjacents i lliures
+%   del tauler i hi col.loca els valors de la peca.
+%   El tauler s'acumula com a llista de parells Coord-Valor.
 %
-%   Ordre canònic [F1,C1] @< [F2,C2] per eliminar
-%   duplicats simètrics de posició.
-%
-%   Peces   : peces que queden per col·locar
-%   Caselles: caselles lliures que queden disponibles
-%   Solucio : llista de posicions de cada peça
+%   Peces   : peces que queden per col.locar
+%   Caselles: totes les coordenades valides del tauler
+%   Acc     : caselles ja ocupades (acumulador)
+%   Tauler  : tauler final amb totes les peces col.locades
+%   Solucio : llista de posicions de cada peca
 % ============================================================
-col_loca_peces([], _, []).
-col_loca_peces([_|Peces], Caselles, [[[F1,C1],[F2,C2]]|Sol]) :-
-    % select/3: tria [F1,C1] i l'elimina de les lliures
-    select([F1,C1], Caselles, Caselles1),
-    % Tria una casella adjacent
+col_loca_peces([], _, Tauler, Tauler, []).
+col_loca_peces([[V1,V2]|Peces], Caselles, Acc, Tauler,
+               [[[F1,C1],[F2,C2]]|Sol]) :-
+    % Tria la casella de la primera meitat de la peca
+    membre([F1,C1], Caselles),
+    \+ ocupada([F1,C1], Acc),
+    % Tria una casella adjacent per a la segona meitat
     adjacent([F1,C1], [F2,C2]),
-    % Ordre canònic: evita duplicats per simetria de posició
-    [F1,C1] @< [F2,C2],
-    % Comprova que [F2,C2] és vàlida i lliure, i l'elimina
-    select([F2,C2], Caselles1, Caselles2),
-    % Continua amb la resta de peces
-    col_loca_peces(Peces, Caselles2, Sol).
+    membre([F2,C2], Caselles),
+    \+ ocupada([F2,C2], Acc),
+    % Continua col.locant la resta de peces
+    col_loca_peces(Peces, Caselles,
+                   [[F1,C1]-V1, [F2,C2]-V2 | Acc],
+                   Tauler, Sol).
+
+% ============================================================
+% ocupada(+Coord, +Tauler)
+%
+%   Cert si la coordenada Coord ja esta ocupada al Tauler.
+% ============================================================
+ocupada(Coord, [Coord-_|_]) :- !.
+ocupada(Coord, [_|Rest]) :-
+    ocupada(Coord, Rest).
 
 % ============================================================
 % adjacent(+Coord1, ?Coord2)
 %
-%   Cert si les dues coordenades són adjacents (4-connexitat).
-%   Les coordenades fora del tauler es filtren a posteriori
-%   per select/3 (que comprova pertinença a Caselles).
+%   Cert si les dues coordenades son adjacents (4-connexitat).
 % ============================================================
 adjacent([F,C], [F,C2]) :- C2 is C + 1.
 adjacent([F,C], [F,C2]) :- C2 is C - 1.
@@ -203,8 +235,8 @@ adjacent([F,C], [F2,C]) :- F2 is F - 1.
 % ============================================================
 % comprova_regions(+Regions, +Tauler)
 %
-%   Comprova que cada regió del puzle compleix la seva
-%   restricció donats els valors del tauler.
+%   Comprova que cada region del puzle compleix la seva
+%   restriccio donats els valors del tauler.
 % ============================================================
 comprova_regions([], _).
 comprova_regions([R|Rs], Tauler) :-
@@ -214,8 +246,8 @@ comprova_regions([R|Rs], Tauler) :-
 % ============================================================
 % comprova_region(+Region, +Tauler)
 %
-%   Comprova la restricció d'una sola regió:
-%   - empty  : cap restricció sobre els valors
+%   Comprova la restriccio d'una sola region:
+%   - empty  : cap restriccio sobre els valors
 %   - equals : tots els valors han de ser iguals
 %   - sum    : la suma ha de ser igual a Obj
 %   - less   : la suma ha de ser estrictament menor que Obj
@@ -226,40 +258,35 @@ comprova_region(region(empty, _, _), _) :- !.
 
 comprova_region(region(equals, _, Cells), Tauler) :-
     !,
-    Cells = [_|_],   % guàrdia: la llista no pot ser buida
     valors_caselles(Cells, Tauler, Vals),
     tots_iguals(Vals).
 
 comprova_region(region(sum, Obj, Cells), Tauler) :-
     !,
-    Cells = [_|_],
     valors_caselles(Cells, Tauler, Vals),
     suma_llista(Vals, Obj).
 
 comprova_region(region(less, Obj, Cells), Tauler) :-
     !,
-    Cells = [_|_],
     valors_caselles(Cells, Tauler, Vals),
     suma_llista(Vals, S),
     S < Obj.
 
 comprova_region(region(greater, Obj, Cells), Tauler) :-
     !,
-    Cells = [_|_],
     valors_caselles(Cells, Tauler, Vals),
     suma_llista(Vals, S),
     S > Obj.
 
 comprova_region(region(unequal, _, Cells), Tauler) :-
     !,
-    Cells = [_|_],
     valors_caselles(Cells, Tauler, Vals),
     tots_diferents(Vals).
 
 % ============================================================
 % valors_caselles(+Cells, +Tauler, -Vals)
 %
-%   Obté la llista de valors del tauler corresponents a una
+%   Obte la llista de valors del tauler corresponents a una
 %   llista de coordenades.
 % ============================================================
 valors_caselles([], _, []).
@@ -270,7 +297,7 @@ valors_caselles([C|Cs], Tauler, [V|Vs]) :-
 % ============================================================
 % valor_casella(+Coord, +Tauler, -Valor)
 %
-%   Obté el valor associat a una coordenada al tauler.
+%   Obte el valor associat a una coordenada al tauler.
 % ============================================================
 valor_casella(Coord, [Coord-V|_], V) :- !.
 valor_casella(Coord, [_|Rest], V) :-
@@ -279,9 +306,9 @@ valor_casella(Coord, [_|Rest], V) :-
 % ============================================================
 % tots_iguals(+Llista)
 %
-%   Cert si tots els elements de la llista són iguals.
-%   La llista ha de tenir almenys un element.
+%   Cert si tots els elements de la llista son iguals.
 % ============================================================
+tots_iguals([]).
 tots_iguals([_]).
 tots_iguals([X,X|Xs]) :-
     tots_iguals([X|Xs]).
@@ -289,7 +316,7 @@ tots_iguals([X,X|Xs]) :-
 % ============================================================
 % tots_diferents(+Llista)
 %
-%   Cert si tots els elements de la llista són distints.
+%   Cert si tots els elements de la llista son distints.
 % ============================================================
 tots_diferents([]).
 tots_diferents([X|Xs]) :-
@@ -309,22 +336,10 @@ suma_llista([X|Xs], S) :-
 % ============================================================
 % membre(?X, +Llista)
 %
-%   Cert si X és membre de la Llista.
+%   Cert si X es membre de la Llista.
 % ============================================================
 membre(X, [X|_]).
 membre(X, [_|L]) :- membre(X, L).
-
-% ============================================================
-% select(?X, +Llista, -Resta)
-%
-%   Tria X de Llista i retorna la Resta sense X.
-%   Equivalent a membre/2 però elimina l'element en O(n).
-%   Definit aquí per si l'entorn no el té a la biblioteca.
-%   Si s'usa SWI-Prolog, es pot esborrar i usar el built-in.
-% ============================================================
-select(X, [X|Rest], Rest).
-select(X, [Y|Ys], [Y|Zs]) :-
-    select(X, Ys, Zs).
 
 % ============================================================
 % imprimeix_solucio(+Regions, +Peces, +Solucio)
@@ -332,12 +347,13 @@ select(X, [Y|Ys], [Y|Zs]) :-
 %   OPCIONAL: imprimeix el tauler per terminal amb els valors
 %   de cada casella. Les posicions fora del tauler surten ' . '.
 %
-%   Usa construeix_tauler/3 directament en lloc
-%   de col_loca_peces/5, evitant backtracking innecessari.
+%   Regions : regions del puzle (per obtenir les caselles)
+%   Peces   : peces de domino
+%   Solucio : solucio ja calculada o verificada
 % ============================================================
 imprimeix_solucio(Regions, Peces, Solucio) :-
-    construeix_tauler(Peces, Solucio, Tauler),
     totes_caselles(Regions, Caselles),
+    col_loca_peces(Peces, Caselles, [], Tauler, Solucio),
     mida_tauler(Caselles, MaxF, MaxC),
     nl,
     imprimeix_files(0, MaxF, 0, MaxC, Tauler),
@@ -346,7 +362,8 @@ imprimeix_solucio(Regions, Peces, Solucio) :-
 % ============================================================
 % mida_tauler(+Caselles, -MaxFila, -MaxColumna)
 %
-%   Obté la fila i columna màximes del tauler.
+%   Obte la fila i columna maximes del tauler a partir de les
+%   caselles valides, sense usar findall.
 % ============================================================
 mida_tauler(Caselles, MaxF, MaxC) :-
     extreu_files(Caselles, Fs),
@@ -354,10 +371,12 @@ mida_tauler(Caselles, MaxF, MaxC) :-
     max_llista(Fs, MaxF),
     max_llista(Cs, MaxC).
 
+% extreu_files(+Caselles, -Files): extreu la llista de files
 extreu_files([], []).
 extreu_files([[F,_]|Rest], [F|Fs]) :-
     extreu_files(Rest, Fs).
 
+% extreu_columnes(+Caselles, -Columnes): extreu la llista de columnes
 extreu_columnes([], []).
 extreu_columnes([[_,C]|Rest], [C|Cs]) :-
     extreu_columnes(Rest, Cs).
@@ -365,7 +384,7 @@ extreu_columnes([[_,C]|Rest], [C|Cs]) :-
 % ============================================================
 % max_llista(+Llista, -Max)
 %
-%   Obté el valor màxim d'una llista de nombres.
+%   Obte el valor maxim d'una llista de nombres.
 % ============================================================
 max_llista([X], X).
 max_llista([X|Xs], X) :-
@@ -376,6 +395,8 @@ max_llista([_|Xs], M) :-
 
 % ============================================================
 % imprimeix_files(+F, +MaxF, +MinC, +MaxC, +Tauler)
+%
+%   Imprimeix fila a fila el tauler des de F fins MaxF.
 % ============================================================
 imprimeix_files(F, MaxF, _, _, _) :- F > MaxF, !.
 imprimeix_files(F, MaxF, MinC, MaxC, Tauler) :-
@@ -386,6 +407,8 @@ imprimeix_files(F, MaxF, MinC, MaxC, Tauler) :-
 
 % ============================================================
 % imprimeix_columnes(+F, +C, +MaxC, +Tauler)
+%
+%   Imprimeix les caselles d'una fila, columna per columna.
 % ============================================================
 imprimeix_columnes(_, C, MaxC, _) :- C > MaxC, !.
 imprimeix_columnes(F, C, MaxC, Tauler) :-
@@ -395,6 +418,9 @@ imprimeix_columnes(F, C, MaxC, Tauler) :-
 
 % ============================================================
 % imprimeix_casella(+F, +C, +Tauler)
+%
+%   Imprimeix el valor de la casella [F,C] si existeix,
+%   o ' . ' si la casella no pertany al tauler.
 % ============================================================
 imprimeix_casella(F, C, Tauler) :-
     valor_casella([F,C], Tauler, V), !,
