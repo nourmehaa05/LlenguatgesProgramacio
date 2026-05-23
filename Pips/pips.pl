@@ -87,6 +87,11 @@
 %     Mostra els valors de cada casella del tauler, i ' . '
 %     per les posicions fora de les regions.
 %
+%   - MILLORA DE RENDIMENT: comprovació parcial de restriccions
+%     durant la col·locació de peces (poda anticipada).
+%     Això evita explorar branques inviables i redueix dràsticament
+%     el temps de cerca en puzles de dificultat mitjana i alta.
+%
 % ============================================================
 % DISSENY LÒGIC
 % ============================================================
@@ -101,8 +106,16 @@
 %   2. Per a cada peça, es trien dues caselles adjacents i lliures
 %      on col·locar-la (col_loca_peces/5). El tauler s'acumula
 %      com una llista de parells Coordenada-Valor.
-%   3. Un cop col·locades totes les peces, es comproven totes les
-%      restriccions de les regions (comprova_regions/2).
+%   3. MILLORA: Després de cada col·locació, es comproven les
+%      restriccions de les regions que ja estan completament
+%      omplertes (comprova_regions_parcial/2). Això poda branques
+%      inviables molt abans d'acabar de col·locar totes les peces.
+%   4. A més, es comproven restriccions de suma/less/greater de
+%      forma incremental: si la suma parcial ja supera l'objectiu,
+%      es poda immediatament sense esperar a omplir la regió.
+%   5. Un cop col·locades totes les peces, es comproven les
+%      restriccions restants (les de regions no completament plenes
+%      durant la construcció).
 %   Si alguna restricció falla, Prolog fa backtracking i prova
 %   una col·locació diferent.
 %
@@ -154,7 +167,9 @@ solucio_pips_directe(Regions, Peces, Solucio) :-
     totes_caselles(Regions, Caselles),
     % Pas 2: col.locar totes les peces al tauler, provant totes
     % les posicions i orientacions possibles.
-    col_loca_peces(Peces, Caselles, [], Tauler, Solucio),
+    % MILLORA: ara col_loca_peces també rep les Regions per poder
+    % fer comprovació parcial de restriccions durant la col·locació.
+    col_loca_peces(Peces, Caselles, [], Tauler, Solucio, Regions),
     % Pas 3: verificar que els valors del tauler compleixen totes
     % les restriccions de les regions.
     comprova_regions(Regions, Tauler).
@@ -186,7 +201,7 @@ unio([X|Xs], L, [X|R]) :-
     unio(Xs, L, R).
 
 % ============================================================
-% col_loca_peces(+Peces, +Caselles, +Acc, -Tauler, -Solucio)
+% col_loca_peces(+Peces, +Caselles, +Acc, -Tauler, -Solucio, +Regions)
 %
 %   Per a cada peca, tria dues caselles adjacents i lliures
 %   del tauler i hi col.loca els valors de la peca.
@@ -197,10 +212,15 @@ unio([X|Xs], L, [X|R]) :-
 %   Acc     : caselles ja ocupades (acumulador)
 %   Tauler  : tauler final amb totes les peces col.locades
 %   Solucio : llista de posicions de cada peca
+%   Regions : regions del puzle (per a la comprovació parcial)
+%
+%   MILLORA respecte la versió anterior: ara s'afegeix el
+%   paràmetre Regions i es crida comprova_parcial/2 després
+%   de cada col·locació per podar branques inviables aviat.
 % ============================================================
-col_loca_peces([], _, Tauler, Tauler, []).
+col_loca_peces([], _, Tauler, Tauler, [], _).
 col_loca_peces([[V1,V2]|Peces], Caselles, Acc, Tauler,
-               [[[F1,C1],[F2,C2]]|Sol]) :-
+               [[[F1,C1],[F2,C2]]|Sol], Regions) :-
     % Tria la casella de la primera meitat de la peca
     membre([F1,C1], Caselles),
     \+ ocupada([F1,C1], Acc),
@@ -208,10 +228,146 @@ col_loca_peces([[V1,V2]|Peces], Caselles, Acc, Tauler,
     adjacent([F1,C1], [F2,C2]),
     membre([F2,C2], Caselles),
     \+ ocupada([F2,C2], Acc),
+    % Nou acumulador amb les dues caselles de la peça
+    NouAcc = [[F1,C1]-V1, [F2,C2]-V2 | Acc],
+    % MILLORA: comprova restriccions parcials abans de continuar.
+    % Si alguna restricció ja és violada, Prolog fa backtracking
+    % aquí mateix sense explorar la resta de l'arbre de cerca.
+    comprova_parcial(Regions, NouAcc),
     % Continua col.locant la resta de peces
-    col_loca_peces(Peces, Caselles,
-                   [[F1,C1]-V1, [F2,C2]-V2 | Acc],
-                   Tauler, Sol).
+    col_loca_peces(Peces, Caselles, NouAcc, Tauler, Sol, Regions).
+
+% ============================================================
+% comprova_parcial(+Regions, +TaulerParcial)
+%
+%   Comprova restriccions de forma incremental durant la
+%   construcció del tauler. Per cada regió:
+%
+%   - Si la regió està completament omplerta al tauler parcial,
+%     es comprova la seva restricció completa.
+%   - Si la regió està parcialment omplerta:
+%     * Per sum: si la suma parcial ja supera l'objectiu, poda.
+%     * Per less: si la suma parcial ja >= objectiu, poda.
+%     * Per equals/unequal/greater: no es pot podar anticipadament
+%       sense tots els valors, es deixa per al final.
+%   - Si la regió no té cap casella omplerta, no es fa res.
+% ============================================================
+comprova_parcial([], _).
+comprova_parcial([R|Rs], TaulerParcial) :-
+    comprova_parcial_regio(R, TaulerParcial),
+    comprova_parcial(Rs, TaulerParcial).
+
+% ============================================================
+% comprova_parcial_regio(+Region, +TaulerParcial)
+%
+%   Comprova una sola regió de forma incremental.
+%   Delega a comprova_restriccio_parcial/4 segons la condició.
+% ============================================================
+
+% Regió empty: mai falla, no cal comprovar res
+comprova_parcial_regio(region(empty, _, _), _) :- !.
+
+% Per a la resta de condicions: recull els valors coneguts
+% i aplica la poda corresponent
+comprova_parcial_regio(region(Cond, Obj, Cells), Tauler) :-
+    membre(Cond, [sum, less, greater, equals, unequal]),
+    !,
+    % Recull els valors de les caselles que ja estan al tauler
+    valors_parcials(Cells, Tauler, ValsConoceguts, NumBuits),
+    comprova_restriccio_parcial(Cond, Obj, ValsConoceguts, NumBuits).
+
+% Cas general: si no és cap de les condicions conegudes, no poda
+comprova_parcial_regio(_, _).
+
+% ============================================================
+% valors_parcials(+Cells, +Tauler, -ValsConoceguts, -NumBuits)
+%
+%   Separa les caselles d'una regió en:
+%   - ValsConoceguts: valors de les caselles ja ocupades
+%   - NumBuits: nombre de caselles encara buides
+% ============================================================
+valors_parcials([], _, [], 0).
+valors_parcials([C|Cs], Tauler, [V|Vs], Buits) :-
+    valor_casella(C, Tauler, V), !,
+    valors_parcials(Cs, Tauler, Vs, Buits).
+valors_parcials([_|Cs], Tauler, Vs, Buits) :-
+    valors_parcials(Cs, Tauler, Vs, BuitsRest),
+    Buits is BuitsRest + 1.
+
+% ============================================================
+% comprova_restriccio_parcial(+Cond, +Obj, +ValsConoceguts, +NumBuits)
+%
+%   Aplica la poda per cada tipus de condició:
+%
+%   - sum: si la suma ja supera l'objectiu, poda (les peces sempre
+%     tenen valors >= 0, mai podran reduir la suma).
+%     Si NumBuits = 0, la suma ha de ser exactament Obj.
+%
+%   - less: si la suma parcial ja >= Obj, poda (les caselles
+%     restants no podran fer-la baixar).
+%     Si NumBuits = 0, comprova estrictament.
+%
+%   - greater: no poda fins que la regió és plena (no sabem si
+%     la suma final serà suficient sense els valors que falten).
+%     Si NumBuits = 0, comprova estrictament.
+%
+%   - equals: si NumBuits = 0, comprova tots iguals.
+%     Poda anticipada: si ja hi ha dos valors distints, impossible.
+%
+%   - unequal: si NumBuits = 0, comprova tots diferents.
+%     Poda anticipada: si ja hi ha un duplicat, impossible.
+% ============================================================
+
+% sum parcial: si la suma ja supera l'objectiu, poda
+comprova_restriccio_parcial(sum, Obj, Vals, 0) :-
+    !,
+    suma_llista(Vals, Obj).  % Regió completa: ha de ser exactament Obj
+comprova_restriccio_parcial(sum, Obj, Vals, _) :-
+    suma_llista(Vals, S),
+    S =< Obj.                % Parcial: la suma no pot superar Obj
+
+% less parcial: si la suma ja >= Obj, poda
+comprova_restriccio_parcial(less, Obj, Vals, 0) :-
+    !,
+    suma_llista(Vals, S),
+    S < Obj.                 % Regió completa: ha de ser < Obj
+comprova_restriccio_parcial(less, Obj, Vals, _) :-
+    suma_llista(Vals, S),
+    S < Obj.                 % Parcial: si ja >= Obj, poda
+
+% greater parcial: no podem podar fins que la regió és plena
+comprova_restriccio_parcial(greater, Obj, Vals, 0) :-
+    !,
+    suma_llista(Vals, S),
+    S > Obj.                 % Regió completa: ha de ser > Obj
+comprova_restriccio_parcial(greater, _, _, _).
+    % Parcial: no podem saber si la suma final serà > Obj
+
+% equals parcial: si la regió és plena, comprova tots iguals
+comprova_restriccio_parcial(equals, _, Vals, 0) :-
+    !,
+    tots_iguals(Vals).
+comprova_restriccio_parcial(equals, _, Vals, _) :-
+    % Poda anticipada: si ja hi ha dos valors distints, impossible
+    \+ hi_ha_dos_distints(Vals).
+
+% unequal parcial: si la regió és plena, comprova tots diferents
+comprova_restriccio_parcial(unequal, _, Vals, 0) :-
+    !,
+    tots_diferents(Vals).
+comprova_restriccio_parcial(unequal, _, Vals, _) :-
+    % Poda anticipada: si ja hi ha un duplicat, impossible
+    tots_diferents(Vals).
+
+% ============================================================
+% hi_ha_dos_distints(+Llista)
+%
+%   Cert si la llista conté almenys dos valors distints.
+%   Serveix per podar regions equals quan ja sabem que
+%   no tots els valors presents poden ser iguals.
+% ============================================================
+hi_ha_dos_distints([X,Y|_]) :- X \= Y, !.
+hi_ha_dos_distints([_|Rest]) :- hi_ha_dos_distints(Rest).
 
 % ============================================================
 % ocupada(+Coord, +Tauler)
@@ -353,7 +509,7 @@ membre(X, [_|L]) :- membre(X, L).
 % ============================================================
 imprimeix_solucio(Regions, Peces, Solucio) :-
     totes_caselles(Regions, Caselles),
-    col_loca_peces(Peces, Caselles, [], Tauler, Solucio),
+    col_loca_peces(Peces, Caselles, [], Tauler, Solucio, Regions),
     mida_tauler(Caselles, MaxF, MaxC),
     nl,
     imprimeix_files(0, MaxF, 0, MaxC, Tauler),
