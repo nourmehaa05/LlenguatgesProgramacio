@@ -13,17 +13,22 @@
 % Convocatòria: Ordinària
 %
 % ============================================================
-% COM FER SERVIR ELS PREDICATS
+% GUIA D'ÚS
 % ============================================================
 %
-%   1) Comprovar que una solució coneguda és correcta:
+% Aquest fitxer es pot carregar directament a SWI-Prolog amb:
+%   ?- [pips].
+%
+% Predicats principals:
+%
+%   1) Verificar una solució coneguda
 %      ?- puzzle(20250818, easy, R, P, S), solucio_pips(R, P, S).
 %
-%   2) Calcular la solució d'un puzle i comparar amb l'esperada:
+%   2) Calcula la solució i comprova que coincideix amb l'esperada
 %      ?- puzzle(20250818, easy, R, P, S),
 %         solucio_pips(R, P, SC), S = SC.
 %
-%   3) Calcular la solució directament sense usar puzzle/5:
+%   3) Resoldre un puzle sense usar puzzle/5
 %      ?- solucio_pips(
 %           [region(empty, nil, [[0,0]]),
 %            region(equals, nil, [[0,1],[0,2],[1,1],[1,2]]),
@@ -32,92 +37,59 @@
 %           [[2,2],[5,2],[2,3],[6,6]],
 %           Solucio).
 %
-%   4) Imprimir el tauler amb la solució (opcional):
+%   4) Imprimir el tauler per terminal
 %      ?- puzzle(20250818, easy, R, P, S), imprimeix_solucio(R, P, S).
 %
+% Predicats opcionals implementats:
 %
-% ============================================================
-% ASPECTES OPCIONALS IMPLEMENTATS
-% ============================================================
+%   - solucio_pips/3 també pot treballar amb algun argument variable.
+%     Si la solució ja és coneguda, es poden recuperar les regions o
+%     les peces corresponents a partir de la base de puzles.
 %
-%   - solucio_pips/3 amb altres arguments no instanciats
-%     * Si la Solucio ja es coneix, es pot recuperar la resta
-%       igualant amb la base de puzles disponibles. Per exemple:
-%         ?- puzzle(20250818, easy, Regions, Peces, Solucio),
-%            solucio_pips(Regions, Peces, Solucio).
-%       Això també permet consultar quin conjunt de peces o
-%       quines regions corresponen a una solucio donada.
+%     Exemple:
+%       ?- puzzle(20250818, easy, Regions, Peces, Solucio),
+%          solucio_pips(Regions, Peces, Solucio).
 %
-%     Exemples:
-%       A) Recuperar les peces a partir de regions + solucio:
-%          ?- puzzle(20250818, easy, Regions, _, Solucio),
-%             solucio_pips(Regions, Peces, Solucio).
-%          % Esperat: Peces = [[2,2],[2,3],[5,2],[6,6]].
-%
-%       B) Recuperar les regions a partir de peces + solucio:
-%          ?- puzzle(20250818, easy, _, Peces, Solucio),
-%             solucio_pips(Regions, Peces, Solucio).
-%          % Esperat: Regions = [region(empty, nil, [[0,0]]), ...].
-%
-%   - solucio_pips/3 amb arguments parcialment instanciats
-%     * Qualsevol dels tres arguments (llistes) pot contenir
-%       variables internes. Exemple:
-%         Solucio = [[[1,1],[1,2]], _, _, _],
-%         solucio_pips(Regions, Peces, Solucio).
-%     * El predicat funciona gràcies a la unificacio i al
-%       backtracking, que exploren les possibles assignacions.
+%   - El predicat accepta arguments parcialment instanciats.
+%     Això permet provar solucions parcials o llistes amb variables
+%     internes, i el motor de Prolog completarà la resta per
+%     unificació i backtracking.
 %
 %     Exemples:
-%       A) Solucio parcial (variables internes):
-%          ?- puzzle(20250818, easy, Regions, Peces, _),
-%             solucio_pips(Regions, Peces, [[[1,1],[1,2]], _, _, _]).
-%          % Esperat: true (la solucio completa s'unifica).
+%       ?- puzzle(20250818, easy, Regions, Peces, _),
+%          solucio_pips(Regions, Peces, [[[1,1],[1,2]], _, _, _]).
+%       ?- puzzle(20250818, easy, Regions, _, Solucio),
+%          solucio_pips(Regions, [[2,2], _, [5,2], [6,6]], Solucio).
+%       ?- puzzle(20250818, easy, _, Peces, Solucio),
+%          solucio_pips([region(empty, nil, [[0,0]]), _], Peces, Solucio).
 %
-%       B) Peces parcials:
-%          ?- puzzle(20250818, easy, Regions, _, Solucio),
-%             solucio_pips(Regions, [[2,2], _, [5,2], [6,6]], Solucio).
-%          % Esperat: true.
+%   - imprimeix_solucio/3 mostra el tauler per terminal.
+%     Les caselles fora de les regions s'imprimeixen com ' . '.
 %
-%       C) Regions parcials:
-%          ?- puzzle(20250818, easy, _, Peces, Solucio),
-%             solucio_pips([region(empty, nil, [[0,0]]), _], Peces, Solucio).
-%          % Esperat: true.
+% Millores incloses:
 %
-%   - Impressió del tauler per terminal: imprimeix_solucio/3
-%     Mostra els valors de cada casella del tauler, i ' . '
-%     per les posicions fora de les regions.
-%
-%   - MILLORA DE RENDIMENT: comprovació parcial de restriccions
-%     durant la col·locació de peces (poda anticipada).
-%     Això evita explorar branques inviables i redueix dràsticament
-%     el temps de cerca en puzles de dificultat mitjana i alta.
+%   - Comprovació parcial de restriccions durant la col·locació de
+%     peces, per podar branques inviables abans d'hora.
+%   - Impressió del tauler en format llegible per depuració ràpida.
 %
 % ============================================================
 % DISSENY LÒGIC
 % ============================================================
 %
-%   El predicat principal solucio_pips/3 funciona tant per
-%   comprovar (tots els arguments instanciats) com per generar
-%   la solució (Solucio no instanciada), gracies al backtracking.
+% El predicat principal solucio_pips/3 cobreix dos usos:
+%   - comprovació: Regions, Peces i Solucio ja estan fixats;
+%   - generació: Solucio encara no està instanciada.
 %
-%   El procés és:
-%   1. S'extreuen totes les caselles valides del tauler a partir
-%      de les regions (totes_caselles/2).
-%   2. Per a cada peça, es trien dues caselles adjacents i lliures
-%      on col·locar-la (col_loca_peces/5). El tauler s'acumula
-%      com una llista de parells Coordenada-Valor.
-%   3. MILLORA: Després de cada col·locació, es comproven les
-%      restriccions de les regions que ja estan completament
-%      omplertes (comprova_regions_parcial/2). Això poda branques
-%      inviables molt abans d'acabar de col·locar totes les peces.
-%   4. A més, es comproven restriccions de suma/less/greater de
-%      forma incremental: si la suma parcial ja supera l'objectiu,
-%      es poda immediatament sense esperar a omplir la regió.
-%   5. Un cop col·locades totes les peces, es comproven les
-%      restriccions restants (les de regions no completament plenes
-%      durant la construcció).
-%   Si alguna restricció falla, Prolog fa backtracking i prova
-%   una col·locació diferent.
+% Flux de resolució:
+%   1. totes_caselles/2 extreu totes les coordenades útils del tauler.
+%   2. col_loca_peces/6 prova totes les col·locacions adjacents i lliures.
+%   3. Després de cada col·locació, comprova_parcial/2 valida restriccions
+%      que ja es poden determinar i talla camins invàlids.
+%   4. Quan el tauler és complet, comprova_regions/2 valida totes les
+%      restriccions finals de cada regió.
+%
+% Si alguna restricció falla, Prolog fa backtracking i prova una
+% col·locació diferent.
 %
 % ============================================================
 
@@ -140,9 +112,8 @@
 %   Solucio : llista de [[F1,C1],[F2,C2]] (posicio de cada peca)
 % ============================================================
 solucio_pips(Regions, Peces, Solucio) :-
-    % Cas principal: si Regions i Peces ja estan fixades,
-    % fem servir el procediment general de resolucio/
-    % comprovacio sobre el tauler construit a partir d'elles.
+    % Cas principal: si Regions i Peces estan completament instanciats,
+    % fem servir el procediment general de resolucio/comprovacio.
     nonvar(Regions),
     nonvar(Peces),
     !,
