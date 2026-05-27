@@ -1,6 +1,5 @@
 import org.jpl7.Query;
 import org.jpl7.Term;
-import org.jpl7.JPL;
 import javax.swing.*;
 import javax.swing.border.*;
 import java.awt.*;
@@ -12,6 +11,8 @@ import java.util.List;
  * PipsGUI.java
  * Interfície gràfica per al puzle Pips, integrada amb SWI-Prolog via JPL.
  *
+ * @author Carolina Marín Sánchez, Nour Iman Mehannek Samah
+ * 
  * Funcionalitats:
  *  - Seleccionar puzle per ID i dificultat (easy, medium)
  *  - Mostrar el tauler buit amb les regions acolorides

@@ -2,7 +2,7 @@
 % pips.pl
 % Assignatura : Llenguatges de Programació, curs 2025-26
 % Pràctica    : Pràctica final – PROLOG (Pips puzzle)
-% Data        : 2025
+% Data        : 2026
 % Nom         : 
 %               - Carolina Marín Sánchez
 %               - Nour Iman Mehannek Samah
@@ -71,6 +71,9 @@
 %   - Comprovació parcial de restriccions durant la col·locació de
 %     peces, per podar branques inviables abans d'hora.
 %   - Impressió del tauler en format llegible per depuració ràpida.
+%   - Interfície d'usuari a través de la llibreria SWING de Java. Les
+%       instruccions per a la seva compilació i execució es troben al
+%       fitxer "PipsGUI.java".
 %
 % ============================================================
 % DISSENY LÒGIC
@@ -91,6 +94,12 @@
 % Si alguna restricció falla, Prolog fa backtracking i prova una
 % col·locació diferent.
 %
+% ============================================================
+% EINES D'IA EMPRADES
+% ============================================================
+%   Aquest projecte s'ha desenvolupat amb el suport de Claude
+%   Sonnet 4.6 com a eina d'assistència per a la documentació,
+%   revisió de codi i depuració d'errors.
 % ============================================================
 
 % ============================================================
