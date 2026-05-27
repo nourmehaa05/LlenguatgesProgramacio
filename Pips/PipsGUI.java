@@ -8,10 +8,20 @@ import java.util.*;
 import java.util.List;
 
 /**
+ * Assignatura : Llenguatges de Programació, curs 2025-26
+ * Pràctica    : Pràctica final – PROLOG (Pips puzzle)
+ * 
+ * @author Carolina Marín Sánchez, Nour Iman Mehannek Samah
+ *
+ * Data: 01/06/2026
+ * 
+ * Grup        : 101
+ * Professors  : 
+ *      - Cabot Nadal, Miquel Àngel
+ *      - Oliver Tomàs, Antoni
+ * 
  * PipsGUI.java
  * Interfície gràfica per al puzle Pips, integrada amb SWI-Prolog via JPL.
- *
- * @author Carolina Marín Sánchez, Nour Iman Mehannek Samah
  * 
  * Funcionalitats:
  *  - Seleccionar puzle per ID i dificultat (easy, medium)
